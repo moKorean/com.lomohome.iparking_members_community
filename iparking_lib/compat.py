@@ -75,13 +75,17 @@ async def language(homey, default: str = "en") -> str:
     return default
 
 
-def _repoint(api, username: str, password: str) -> None:
+def repoint_credentials(api, username: str, password: str) -> None:
     """Point an existing `IparkingApi` at new credentials **in place**.
 
     In place rather than replaced, because every device and every settings-page handler
     caches the object it was handed and never asks for another one; building a new client
     would leave them all talking to the old session. Clearing the session fields is what
     forces the next request to log in with the new credentials.
+
+    Shared with `IparkingApp._client`, which is the whole reason it is a function rather
+    than a method on either: two copies of "which fields go with a credential change" is
+    one too many, and the field they would forget is the same one both times.
 
     `memb_name` and `auth_entries` go with the token deliberately: they describe *the
     account that minted it*. Leaving them behind would let a freshly repointed session
@@ -124,7 +128,7 @@ async def shared_api(homey):
             log=getattr(app, "log", print) if app is not None else print,
         )
     elif api.username != username or api.password != password:
-        _repoint(api, username, password)
+        repoint_credentials(api, username, password)
     # The other half of `app_logout`'s disable, and it has to live here: a runtime that
     # reaches this branch has no `homey.app`, hence no `reauth` to re-enable the session
     # the way IparkingApp does. Saved credentials being present again is the only re-login
