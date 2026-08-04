@@ -256,18 +256,16 @@ def test_parse_per_car_handles_a_batch():
     }
 
 
-def test_top_level_10003_covers_the_requested_plate_when_no_rows_come_back():
-    """The likely real shape of a duplicate: a bare top-level code and nothing else."""
+def test_top_level_10003_with_no_rows_is_not_this_functions_call():
+    """The verified real shape of a duplicate: a bare top-level code and nothing else.
+
+    `parse_per_car` no longer synthesizes a verdict from a top-level code — that used to be
+    driven by a `requested` parameter, removed because passing it made the caller's own
+    `10003` branch unreachable (mutation testing: `client.py`'s `_attempt_register` owns the
+    whole-request verdict now; see its docstring). Omission here is the correct, honest
+    answer, and the caller is the one that reads `result` itself.
+    """
     payload = {"result": "10003", "resultMessage": "기등록 차량"}
-    assert codes.parse_per_car(payload, requested=[PLATE]) == {
-        PLATE: codes.OUTCOME_ALREADY_REGISTERED
-    }
-    # The requested plate is normalized too, so a caller that has not stripped yet is safe.
-    assert codes.parse_per_car(payload, requested=["12가 4567"]) == {
-        PLATE: codes.OUTCOME_ALREADY_REGISTERED
-    }
-    # With nothing requested there is no plate to attach the verdict to; the caller then
-    # has to re-query, which is strictly safer than inventing a key.
     assert codes.parse_per_car(payload) == {}
 
 
@@ -276,7 +274,7 @@ def test_an_explicit_row_wins_over_the_top_level_code():
         "result": "10003",
         "invitationInfoList": [{"carNumber": PLATE, "result": "SUCCESS"}],
     }
-    assert codes.parse_per_car(payload, requested=[PLATE]) == {PLATE: codes.OUTCOME_OK}
+    assert codes.parse_per_car(payload) == {PLATE: codes.OUTCOME_OK}
 
 
 @pytest.mark.parametrize(
@@ -298,4 +296,4 @@ def test_an_explicit_row_wins_over_the_top_level_code():
 )
 def test_parse_per_car_omits_what_it_cannot_read(payload, why):
     """Omission is the contract. Nothing here may produce a success or a failure claim."""
-    assert codes.parse_per_car(payload, requested=[PLATE]) == {}, why
+    assert codes.parse_per_car(payload) == {}, why

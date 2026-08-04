@@ -26,7 +26,7 @@ make a Flow read a benign duplicate as a failed action.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 
 from .plate import strip_plate
 
@@ -166,12 +166,19 @@ def _row_lists(payload: dict) -> list[list]:
     return found
 
 
-def parse_per_car(payload: object, requested: Iterable[str] = ()) -> dict[str, str]:
+def parse_per_car(payload: object) -> dict[str, str]:
     """Per-car outcomes from a `POST /invitations` response, keyed by normalized plate.
 
-    `requested` is the plates that were sent. It is used only for a top-level
-    `10003`, which is a verdict on the whole request with no per-car rows to hang it on;
-    an explicit row always wins over it.
+    Reads **only** explicit per-car rows. A top-level verdict with no rows to hang it on
+    (a bare `10003`, or a plain `0000`) is not this function's business: VERIFIED LIVE
+    2026-08-04, a successful write is exactly `{"result":"0000", ..., "resultData": null}`
+    with no per-car rows in any case the probe could produce, so the whole-request verdict
+    belongs to the caller (`client.py`'s `_attempt_register`), not to this parser. An earlier
+    version accepted a `requested` list and synthesized an `already_registered` verdict for a
+    top-level `10003` itself — mutation testing found that this made the caller's own `10003`
+    branch unreachable (changing it to return `ok` left the whole suite green), so the
+    parameter was removed rather than left as unused-but-tested machinery for a response
+    shape that has never actually appeared.
 
     A plate missing from the returned mapping means the response did not say — the caller
     must re-query rather than assume either way.
@@ -195,9 +202,4 @@ def parse_per_car(payload: object, requested: Iterable[str] = ()) -> dict[str, s
             outcome = per_car_outcome(status)
             if outcome is not None:
                 outcomes.setdefault(plate, outcome)
-    if normalize_code(payload.get("result")) == REGISTERED_CAR:
-        for plate in requested:
-            stripped = strip_plate(plate)
-            if stripped:
-                outcomes.setdefault(stripped, OUTCOME_ALREADY_REGISTERED)
     return outcomes

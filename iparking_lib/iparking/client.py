@@ -846,13 +846,12 @@ class IparkingApi:
         # Hence the ordering below: an explicit per-car row still wins if one ever appears
         # (batch registration is a follow-up, and `invitationInfoList` is natively an array),
         # but its **absence on an 0000 means success**, not doubt.
-        # `requested` is deliberately NOT passed. `parse_per_car` can synthesize an
-        # `already_registered` for a top-level `10003` from the plates it was told were
-        # requested — but then *this* function's `10003` branch below becomes unreachable, and
-        # an unreachable guard is not a guard. (Found by mutation testing: changing that
-        # branch to return `ok` left the entire suite green.) The client knows exactly what it
-        # sent, so it owns the whole-request verdict; the parser is left to do only the one
-        # thing it can do better, which is read explicit per-car rows.
+        # `parse_per_car` no longer takes a `requested` list at all: it used to synthesize an
+        # `already_registered` verdict for a top-level `10003` from the plates it was told
+        # were requested, which made *this* function's `10003` branch below unreachable — an
+        # unreachable guard is not a guard. (Found by mutation testing: changing that branch
+        # to return `ok` left the entire suite green.) The client knows exactly what it sent,
+        # so it owns the whole-request verdict; the parser only reads explicit per-car rows.
         per_car = codes.parse_per_car(envelope)
         outcome = per_car.get(plate)
         if outcome is not None:
