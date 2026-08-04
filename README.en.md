@@ -69,16 +69,11 @@ The Homey app itself is © 2026 Geunwon Mo.
 - **Account sign-in** — sign in with your iParking MEMBERS ID/password from the app
   settings.
 - **"Expected today" sensor** — how many vehicles are **expected to visit today** at this
-  lot, as a device capability (`Expected today · 2 cars`). Cancelled registrations are not
-  counted: iParking's 취소 flips a row's status to `CANCEL` rather than removing it, so
-  counting them shows 6 on a day whose honest answer is 1. It refreshes hourly (± 10 %) in a
-  single request, and this app's own register, cancel or history read updates it immediately at
-  **no extra request**. It rolls over to the new day at midnight KST. Insights is enabled, so
-  you can graph how often you have visitors.
-  <br>The **parking-lot-name sensor shipped up to v0.1.3 is gone**: its value was the same
-  string Homey already shows as the device's name, so the tile printed it twice, and an hourly
-  request went to re-confirm a value that never changes. No re-pairing is needed — updating the
-  app removes it.
+  lot, as a device capability (`Expected today · 2 cars`), with Insights enabled. It refreshes
+  hourly (± 10 %) in a single request, updates immediately and at **no extra request** when this
+  app registers, cancels or reads the history, and rolls over to the new day at midnight KST.
+  **Cancelled registrations are not counted** — iParking's 취소 flips a row's status to `CANCEL`
+  rather than removing it, so counting them shows 6 on a day whose honest answer is 1.
 - **Register a visitor** — the app settings page (the app's primary UI) lets you pick a
   lot, enter a plate number and a visit date, and register. Whitespace in the plate is
   stripped automatically and the cleaned-up value is echoed back once you leave the field
@@ -99,7 +94,9 @@ The Homey app itself is © 2026 Geunwon Mo.
   normalizes the plate in place so you see what was stored (`12가 3456` → `12가3456`). A
   half-filled slot or an invalid plate produces no button, and the log says which slot and why.
 - **Registration history** — view and cancel past registrations from the app settings page,
-  **newest visit first**.
+  **newest visit first**. Cancelling takes **two presses**: the first turns the button into
+  `Really cancel?`, the second performs it, and it reverts after five seconds. It withdraws a
+  real access grant immediately, so it should not fire on one stray click.
 - **Already-registered guidance** — re-registering the same plate is reported as a
   distinct "already registered" outcome, not a generic error.
 - **Uncertain-outcome guidance** — if a registration attempt times out and its outcome
@@ -111,12 +108,14 @@ The Homey app itself is © 2026 Geunwon Mo.
 
 | Item | Status |
 | --- | --- |
-| Sign-in · "registered today" count sensor (with Insights) | Supported |
+| Sign-in · "expected today" count sensor (with Insights) | Supported |
 | Visitor registration (settings page · Flow action) | Supported |
 | Frequent-vehicle buttons (20 device settings → up to 10 push buttons) | Supported |
 | Registration history · cancel | Supported |
 | Multi-building / multi-lot accounts | Supported (only 1 building × 1 lot verified live) |
-| Dashboard widget | Planned for v0.1.1 |
+| Editing a registration (`PUT /invitations`) | Not supported — the endpoint is known but was never exercised |
+| Notifying a visitor by SMS | Not supported — as above |
+| Dashboard widget | Planned only |
 
 ## Setup
 
@@ -125,6 +124,26 @@ The Homey app itself is © 2026 Geunwon Mo.
 3. Add a device → **iParking Visitor Parking** → pick the lot tied to your account.
 4. From the app settings page, enter a plate number and visit date to register, and
    review the registration history.
+5. Optional: put your frequent visitors into the **device settings** as name/plate pairs. Each
+   complete pair gets a button on the device that registers it for today in one press.
+
+## Known limits
+
+Not defects in this app but properties of the server it talks to, and you will meet them.
+
+- **The iParking API host resets about a third of its plain-HTTP connections.** Measured: 20
+  identical read requests returned 14 answers and 6 `ConnectionReset`, at random and regardless
+  of headers or environment. So reads, sign-in and cancel **retry** (4 attempts, 0.8 % residual).
+  **A registration never retries** — a reset cannot distinguish "the request never arrived" from
+  "it arrived and only the reply was lost", so retrying could register the same vehicle twice.
+  Instead the app re-queries to find out what happened, and if that cannot settle it either, it
+  tells you the outcome is **uncertain** rather than guessing.
+- **Pressing a button on the device tile shows no toast.** The Homey SDK has no success-toast
+  API — the whole surface was checked — so the outcome goes to the **timeline** instead.
+  Registering from the app settings page does show an in-page toast.
+- **A visit date must be within 80 days of today.** The history endpoint is limited to the last
+  three months; whether the *write* endpoint enforces the same bound was never verified, so this
+  is a deliberately conservative cap.
 
 ## Build
 
