@@ -483,50 +483,101 @@ def test_exist_is_already_registered_and_not_a_failure(make_api):
     assert stub.count(HISTORY_URL) == 0
 
 
-def test_a_top_level_10003_is_already_registered(make_api):
-    """`10003` is `registeredCar` — a verdict on the whole request, with no per-car row to
-    hang it on, which is why `parse_per_car` takes the requested plates."""
-    api, stub, _ = make_api({OAUTH_URL: login_ok(), REGISTER_URL: envelope("10003", "기등록 차량")})
+def test_the_real_success_response_carries_no_per_car_data_and_still_means_ok(make_api):
+    """The live probe's actual success response, byte-shaped: `resultData` is **null**.
+
+    Verified 2026-08-04. There is no `invitationInfoList` and no `SUCCESS` array — in any case
+    the probe could produce. This test exists because the pre-probe contract read that silence
+    as "the response did not say" and routed it to `RegisterUncertain`, which would have made
+    **every normal registration** tell the user their car might not be registered and send
+    them to the web UI to check. The top-level `result` is the authority on success.
+    """
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: envelope("0000", "성공", resultData=None),
+    })
+
+    assert register(api) == "ok"
+    assert stub.count(HISTORY_URL) == 0, "a plain 0000 is settled; no recovery needed"
+
+
+def test_the_real_duplicate_response_is_already_registered(make_api):
+    """The probe's duplicate response: top-level `10003`, `resultData` null.
+
+    `10003` is the only `EXIST` signal the service produces in practice — the per-car `EXIST`
+    word never appeared. Mapping it to `already_registered` rather than to a failure is what
+    makes a duplicate a benign third outcome.
+    """
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: envelope("10003", "방문차량 등록이 실패하였습니다. 다시 시도해주세요.",
+                               resultData=None),
+    })
 
     assert register(api) == "already_registered"
     assert stub.count(HISTORY_URL) == 0
 
 
-def test_an_explicit_fail_is_a_verdict_and_not_recovered(make_api):
-    """`FAIL` on a `0000` response is the server telling us it did not register the car.
-    That is a verdict, not an unknown — so it is reported, not re-queried."""
+def test_the_vendors_retry_inviting_duplicate_message_is_never_surfaced(make_api):
+    """The vendor's own `resultMessage` for `10003` calls a duplicate a failure and tells the
+    user to **try again** — against an endpoint that writes to a building's access control.
+
+    Ours says it is already registered instead. This asserts the vendor's sentence reaches
+    neither the outcome nor the log.
+    """
+    vendor_text = "방문차량 등록이 실패하였습니다. 다시 시도해주세요."
+    api, _stub, logs = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: envelope("10003", vendor_text, resultData=None),
+    })
+
+    outcome = register(api)
+
+    assert outcome == "already_registered"
+    assert "다시 시도" not in "\n".join(logs)
+    assert vendor_text not in "\n".join(logs)
+
+
+def test_an_explicit_per_car_row_still_wins_if_one_ever_appears(make_api):
+    """The shape-tolerant parser stays a **fallback**, not dead code.
+
+    Batch registration is a documented follow-up (`invitationInfoList` is natively an array),
+    so a future response may well carry rows. When it does, an explicit verdict for our plate
+    must beat the top-level `0000` — otherwise a per-car `FAIL` inside a `0000` envelope would
+    be reported as a success.
+    """
     api, stub, _ = make_api({OAUTH_URL: login_ok(), REGISTER_URL: per_car("FAIL")})
 
     assert register(api) == "register_failed"
     assert stub.count(HISTORY_URL) == 0
 
 
-def test_a_response_with_no_verdict_for_our_car_is_recovered_then_uncertain(
-    make_api, no_sleep
-):
-    """Worker-4's contract: a plate absent from `parse_per_car`'s mapping means "the response
-    did not say". Never success, never generic failure — the recovery resolves it, and if it
-    cannot, the answer is `RegisterUncertain`."""
-    api, stub, _ = make_api({
-        OAUTH_URL: login_ok(),
-        # A verdict for somebody else's car and nothing for ours.
-        REGISTER_URL: per_car("SUCCESS", plate="12가4567"),
-        HISTORY_URL: history_ok(),
-    })
-
-    with pytest.raises(RegisterUncertain):
-        register(api)
-
-    assert stub.count(HISTORY_URL) == 1
-
-
-def test_a_response_with_no_verdict_is_confirmed_when_the_row_exists(make_api, no_sleep):
-    """The other half: the same shape, but the write did land. The recovery has to be able
-    to say yes, not only to say "unknown"."""
+def test_a_verdict_for_another_car_does_not_override_our_top_level_success(make_api):
+    """A row for somebody else's plate says nothing about ours, and `0000` says ours worked."""
     api, _stub, _ = make_api({
         OAUTH_URL: login_ok(),
-        REGISTER_URL: envelope("0000", "성공"),
-        HISTORY_URL: history_ok(((PLATE, DATE, "RESERVE"),)),
+        REGISTER_URL: per_car("FAIL", plate="34나5678"),
+    })
+
+    assert register(api) == "ok"
+
+
+def test_cancel_then_reregister_reproduces_the_probes_coexisting_rows(make_api, no_sleep):
+    """The probe's exact sequence, as the history endpoint reports it afterwards.
+
+    `DELETE` left a `CANCEL` row with its original `invt_seq`, and re-registering the same
+    plate and date created a **new** row rather than being refused. So the recovery query sees
+    both, and must read the pair as registered.
+    """
+    api, _stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: urllib.error.URLError("reset"),
+        HISTORY_URL: history_ok((
+            {"invt_seq": 3184551, "car_number": PLATE, "invitation_date": DATE,
+             "inot_status": "CANCEL"},          # the DELETEd row, still present
+            {"invt_seq": 3184552, "car_number": PLATE, "invitation_date": DATE,
+             "inot_status": "RESERVE"},         # the re-registration, a new invt_seq
+        )),
     })
 
     assert register(api) == "already_registered"

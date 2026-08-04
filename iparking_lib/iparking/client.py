@@ -565,10 +565,15 @@ class IparkingApi:
     ) -> list[HistoryRow]:
         """등록 내역 rows for a window, newest-first as the server returns them.
 
-        `car_number` is passed through when given, but **every caller filters client-side
-        anyway**: that a non-empty `carNumber` narrows the result server-side is
-        *unverified* (the one verified call sent `""`), so it is treated as an optimisation
-        never relied upon.
+        A non-empty `carNumber` **does** narrow the result server-side — verified live
+        2026-08-04, 43 rows down to 19 for one plate — which is what makes the register
+        path's recovery re-query cheap.
+
+        It is still only an **optimisation, never the guarantee**: every caller filters
+        plate and date client-side regardless. The server filter's exact matching rule
+        (trimming? partial match? case?) was not characterised, and the one thing the
+        recovery query must not do is mistake a server-side filter quirk for "this car is
+        not registered".
         """
         today = dates.today_api()
         payload = {
@@ -630,9 +635,15 @@ class IparkingApi:
     async def cancel(self, invt_seq: int) -> None:
         """취소 — `DELETE /invitations/{invt_seq}`. No body.
 
+        **This does not delete the row** (verified live 2026-08-04). It flips `inot_status`
+        to `CANCEL`; the row keeps its `invt_seq` and stays in the 등록 내역 list. So the
+        settings table must expect a cancelled row to still be there — a caller that re-reads
+        the history and looks for the row's *disappearance* would report a working 취소 as
+        broken. `HistoryRow.is_active` is how the table should tell them apart.
+
         Production code rather than test scaffolding: the settings page's per-row 취소 needs
-        it anyway, which is what let item 3's probe prove its own cleanup path with shipping
-        code instead of a throwaway script.
+        it anyway, which is what let the probe prove its own cleanup path with shipping code
+        instead of a throwaway script.
         """
         await self._authed("DELETE", f"/invitations/{int(invt_seq)}")
         self.log(f"iparking: cancelled invitation {int(invt_seq)}")
@@ -815,20 +826,50 @@ class IparkingApi:
         code = codes.normalize_code(envelope.get("result"))
 
         # A non-success code is not evidence of non-registration, so it goes to recovery
-        # rather than straight to a failure report. `10003` is a *verdict* though, and
-        # `parse_per_car` turns it into `already_registered` via `requested`.
+        # rather than straight to a failure report.
         if not (codes.is_success(code) or code == codes.REGISTERED_CAR):
             self.log(f"iparking: register answered {code}; re-querying")
             return None, f"result={code}"
 
-        per_car = codes.parse_per_car(envelope, requested=[plate])
-        # Absent means "the response did not say" (worker-4's contract) — never success,
-        # never generic failure. Recovery is exactly what resolves it.
+        # ── The top-level `result` is the authority on success. VERIFIED LIVE 2026-08-04.
+        #
+        # The probe settled a question the recon could only guess at, and the answer inverts
+        # what this code originally did. A successful `POST /invitations` returns exactly
+        # `{"result":"0000", …, "resultData": null}` — there is **no `invitationInfoList`**,
+        # no `SUCCESS`/`FAIL`/`EXIST` array, in any case the probe could produce.
+        #
+        # So `parse_per_car` finds nothing on a perfectly normal registration. Treating its
+        # silence as "the response did not say" — which is the right reading for a *shape we
+        # have not seen* — made **every successful registration** report as
+        # `RegisterUncertain`, sending the user to the web UI after every single car.
+        #
+        # Hence the ordering below: an explicit per-car row still wins if one ever appears
+        # (batch registration is a follow-up, and `invitationInfoList` is natively an array),
+        # but its **absence on an 0000 means success**, not doubt.
+        # `requested` is deliberately NOT passed. `parse_per_car` can synthesize an
+        # `already_registered` for a top-level `10003` from the plates it was told were
+        # requested — but then *this* function's `10003` branch below becomes unreachable, and
+        # an unreachable guard is not a guard. (Found by mutation testing: changing that
+        # branch to return `ok` left the entire suite green.) The client knows exactly what it
+        # sent, so it owns the whole-request verdict; the parser is left to do only the one
+        # thing it can do better, which is read explicit per-car rows.
+        per_car = codes.parse_per_car(envelope)
         outcome = per_car.get(plate)
-        if outcome is None:
-            self.log("iparking: register response carried no verdict for this car; re-querying")
-            return None, "no_per_car_result"
-        return outcome, ""
+        if outcome is not None:
+            return outcome, ""
+
+        if code == codes.REGISTERED_CAR:
+            # 기등록 차량 — and per the probe, the **only** `EXIST` signal this service
+            # actually emits: the per-car word never appeared in any response.
+            #
+            # The vendor's own `resultMessage` here reads
+            # "방문차량 등록이 실패하였습니다. 다시 시도해주세요." — it calls a duplicate a failure
+            # and tells the user to retry. It is deliberately NOT surfaced: this is a benign
+            # third outcome, and the retry it invites is a write against a building.
+            return codes.OUTCOME_ALREADY_REGISTERED, ""
+
+        # `result == "0000"` and nothing per-car: the normal, verified success path.
+        return codes.OUTCOME_OK, ""
 
     async def _recover_register(
         self, plate: str, api_date: str, park_seq: int, stor_seq: int, failure: str
@@ -853,10 +894,21 @@ class IparkingApi:
         matching = self.matching_rows(rows, plate, api_date)
 
         # THE PREDICATE. Existential over every matching row — never "find the row, then
-        # check its status". `CANCEL` rows coexist with active ones for the same plate and
-        # date, so a single-row lookup can land on the `CANCEL` row and report a write that
-        # *succeeded* as failed; and accepting `CANCEL` as existence reports an
-        # unregistered car as registered, putting a visitor at a gate that will not open.
+        # check its status", and never `if matching:`.
+        #
+        # **The coexistence this depends on was CONFIRMED LIVE on 2026-08-04**, so it is no
+        # longer an inference to be "simplified" away. The probe established:
+        #   * `DELETE /invitations/{seq}` does **not** remove the row. It flips `inot_status`
+        #     to `CANCEL`; the row keeps its `invt_seq` and stays in the list.
+        #   * A `CANCEL` row does **not** block re-registration: the same plate and date
+        #     registers again and creates a **new row with a new `invt_seq`**.
+        # So a plate+date really can have a `CANCEL` row and a `RESERVE` row at the same
+        # time, and a single-row lookup really can land on the wrong one.
+        #
+        # Both directions of getting this wrong cause harm at a gate: a first-match lookup
+        # hitting the `CANCEL` row reports a write that *succeeded* as failed (inviting the
+        # retry that makes a second real registration), while accepting `CANCEL` as existence
+        # reports an unregistered car as registered (a visitor at a gate that will not open).
         if any(row.is_active for row in matching):
             self.log(
                 f"iparking: recovery found {mask_plate(plate)} active on {api_date} "
@@ -875,12 +927,18 @@ class IparkingApi:
     def matching_rows(rows: list[HistoryRow], plate: str, api_date: str) -> list[HistoryRow]:
         """Rows for this plate on this date — **all** of them, including `CANCEL`.
 
-        Filtered client-side unconditionally. Server-side `carNumber` narrowing is
-        unverified, so it is never relied upon; and returning every match (rather than the
-        first) is what makes the existence predicate able to be existential.
+        Filtered client-side **unconditionally**, even though the server's own `carNumber`
+        filter is now known to work (verified live 2026-08-04). It stays an optimisation
+        rather than the guarantee: its matching rule was never characterised, and a quirk
+        there would read as "this car is not registered".
 
-        Both sides are already normalized: the plate went through `normalize_plate` before
-        being sent, and `HistoryRow.car_number` through `strip_plate` on the way in.
+        Returning every match rather than the first is what lets the existence predicate be
+        existential — and `CANCEL` rows coexisting with active ones for the same plate and
+        date is verified behaviour, not a hypothetical.
+
+        The `plate` argument is stripped here as well as by the caller. Not redundant: this
+        method is public and item 5's history filter passes raw user input, where a trailing
+        space would silently match nothing.
         """
         wanted = strip_plate(plate)
         return [

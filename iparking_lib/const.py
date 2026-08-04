@@ -107,16 +107,22 @@ STATUS_CANCEL = "CANCEL"      # 취소
 #: The statuses that constitute **evidence that a car is registered**, and the single most
 #: consequential constant in this app.
 #:
-#: `CANCEL` is excluded, and both directions of getting this wrong cause real harm:
+#: `CANCEL` is excluded. **Verified live 2026-08-04**, so the reasoning below rests on
+#: measurement rather than inference: `DELETE /invitations/{seq}` does not remove a row, it
+#: flips `inot_status` to `CANCEL` and the row keeps its `invt_seq`; and a `CANCEL` row does
+#: not block re-registering the same plate and date, which creates a **new** row. A plate can
+#: therefore hold a `CANCEL` row and a `RESERVE` row simultaneously.
+#:
+#: Both directions of getting this wrong cause real harm:
 #:
 #: * Counting `CANCEL` as existence reports an *unregistered* car as already registered —
 #:   which puts a visitor in front of a gate that will not open. Reachable by
 #:   register → 취소 → re-register, which the per-row 취소 button makes easy.
 #: * Excluding it is only safe because the predicate is **existential over all matching
-#:   rows** (`any(...)`) rather than "find the row, then check its status". `CANCEL` rows
-#:   **coexist** with active ones for the same plate and date, so a single-row lookup can
-#:   land on the `CANCEL` row and report a *succeeded* registration as failed — the same
-#:   harm with the sign flipped, and the defect that survived a full review round.
+#:   rows** (`any(...)`) rather than "find the row, then check its status". Since `CANCEL`
+#:   rows coexist with active ones, a single-row lookup can land on the `CANCEL` row and
+#:   report a *succeeded* registration as failed — the same harm with the sign flipped, and
+#:   the defect that survived a full review round.
 ACTIVE_STATUSES = frozenset({STATUS_RESERVE, STATUS_IN, STATUS_OUT})
 
 # --- Settings keys ----------------------------------------------------------
