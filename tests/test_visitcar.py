@@ -1914,14 +1914,24 @@ def test_each_button_registers_its_own_slot(make_device):
 
 
 @pytest.mark.parametrize("sdk_awaitable", [False, True])
-@pytest.mark.parametrize("sdk_spelling", ["snake", "camel"])
+@pytest.mark.parametrize("sdk_spelling", ["snake"])
 def test_the_button_surface_tolerates_either_sdk_spelling(make_device, sdk_spelling,
                                                           sdk_awaitable):
-    """`add_capability`, `remove_capability`, `set_capability_options`, `set_settings`,
-    `get_settings` and the listener registrar — six unpinned spellings, and the CLI ships no
-    Python stub to check any of them against. `sdk_awaitable` covers the other half of
-    `compat.resolve`'s contract, where an un-awaited coroutine looks like a successful call and
-    does nothing."""
+    """`add_capability`, `remove_capability`, `set_capability_options` and the listener
+    registrar, over `compat.resolve`'s two return contracts — `sdk_awaitable` covers the half
+    where an un-awaited coroutine looks like a success and does nothing.
+
+    **The `camel` case is gone, and the spellings are no longer "unpinned".** The runtime's own
+    source is obtainable: `ghcr.io/athombv/python-homey-app-runner` carries
+    `site-packages/homey/`, and every `Device` method there is snake_case with **no camelCase
+    alias**. Parametrizing a spelling that cannot exist tested our fake, not the SDK. The
+    tolerant lookups stay in the code as cheap insurance against a future runtime, but nothing
+    asserts a contract we have now read.
+
+    `set_settings` and `get_settings` left this test with the same evidence: `set_settings` is
+    called directly now, because the write has to inspect the `HomeyError` it raises during
+    `on_settings` in order to retry past it, and a swallow-and-log helper cannot.
+    """
     api = _StubApi()
     dev, _homey = make_device(api=api, notifications=FakeNotifications(),
                              sdk_spelling=sdk_spelling, sdk_awaitable=sdk_awaitable)
@@ -2073,6 +2083,11 @@ def test_the_settings_write_is_the_only_runtime_write_and_the_store_is_still_unt
     source = (ROOT / "iparking_lib/visitcar/device.py").read_text(encoding="utf-8")
 
     assert "set_store_value(" not in source.replace("`set_store_value`", "")
-    assert '"set_settings", "setSettings"' in source
+    # Called directly rather than through the tolerant `_sdk_call` helper: the write must read
+    # the `HomeyError` the SDK raises while `on_settings` is pending in order to retry past it,
+    # and a helper that swallows-and-logs cannot. Safe to name one spelling because the runtime's
+    # own source has been read — `site-packages/homey/device.py` in the runner image defines
+    # `set_settings` and no camelCase alias.
+    assert "await compat.resolve(self.set_settings(writes))" in source
 
 

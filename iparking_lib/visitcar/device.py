@@ -110,6 +110,8 @@ from iparking_lib.const import (
     POLL_INTERVAL_S,
     POLL_JITTER,
     POLL_START_JITTER,
+    SETTINGS_WRITE_ATTEMPTS,
+    SETTINGS_WRITE_RETRY_S,
     STORE_LOT_ID,
     STORE_PARK_SEQ,
     STORE_STOR_SEQ,
@@ -737,15 +739,43 @@ class VisitCarDevice_(device.Device):
 
         Only the keys are logged, never the values — a favourite's plate is still a plate.
         """
-        # One turn of the loop past the hook that scheduled this. `create_task` already
-        # guarantees that much; the explicit yield is margin for a runtime whose `_on_settings`
-        # awaits something after `on_settings` returns but before it clears its pending flag.
-        await asyncio.sleep(0)
-        if self._settings_busy:
-            self.log("iparking: a newer settings save is in flight; normalized write skipped")
+        # Yielding one turn was not enough, and could not be: `Device._on_settings` holds
+        # `_on_settings_pending = True` across `await self.on_settings(...)`, and our handler
+        # awaits the button reconcile *after* scheduling this — so this task gets a turn while
+        # the flag is still set, and `set_settings` raises
+        # `HomeyError("Cannot set settings while on_settings is still pending")`.
+        #
+        # The SDK offers no "settings committed" signal to wait on, so rather than guess at an
+        # ordering, retry until the window closes. The flag is cleared in a `finally` immediately
+        # after the handler returns, so in practice this succeeds on the first or second try; the
+        # remaining attempts are there so a slow reconcile cannot silently lose the write.
+        #
+        # Worth knowing for anyone tempted to simplify: the same method then does
+        # `self._settings = frozen_new_settings`, overwriting with the values the user submitted.
+        # So a write that lands *too early* is not merely refused — it is discarded. Late is the
+        # only safe direction, which is why this retries forward and never pre-empts.
+        last = ""
+        for attempt in range(1, SETTINGS_WRITE_ATTEMPTS + 1):
+            await asyncio.sleep(0 if attempt == 1 else SETTINGS_WRITE_RETRY_S)
+            if self._settings_busy:
+                self.log("iparking: a newer settings save is in flight; normalized write skipped")
+                return
+            try:
+                # Through `compat.resolve`, not a bare `await`: the SDK's `set_settings` is a
+                # coroutine, but a bare await would raise `TypeError` against any surface that
+                # returns a plain value — which is exactly what a test caught here.
+                await compat.resolve(self.set_settings(writes))
+            except Exception as exc:  # noqa: BLE001 — the SDK raises a bare HomeyError here
+                last = str(exc)
+                if "on_settings is still pending" not in last:
+                    self.log(f"iparking: normalized {sorted(writes)} failed: {exc}")
+                    return
+                continue
+            self.log(f"iparking: normalized {sorted(writes)} written (attempt {attempt})")
             return
-        await self._sdk_call(
-            ("set_settings", "setSettings"), writes, what=f"normalized {sorted(writes)}"
+        self.log(
+            f"iparking: normalized {sorted(writes)} gave up after "
+            f"{SETTINGS_WRITE_ATTEMPTS} attempts: {last}"
         )
 
     async def _reconcile_buttons(self, settings: dict | None = None) -> None:

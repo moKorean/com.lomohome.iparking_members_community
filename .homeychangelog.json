@@ -22,5 +22,9 @@
   "0.1.5": {
     "ko": "이전 버전에서 기기를 추가해 두신 경우 \"오늘 등록\" 센서가 보이지 않던 문제를 고쳤습니다. 기기를 다시 추가할 필요 없이 앱을 켤 때 자동으로 붙습니다.",
     "en": "Fixed the \"Registered today\" sensor not appearing on devices that were added by an earlier version. It is now attached on app start, with no need to re-add the device."
+  },
+  "0.1.6": {
+    "ko": "자주 오는 차량의 차량번호에 공백을 넣어 저장하면 정리된 값이 설정에 실제로 반영됩니다. 이전에는 저장 직후 쓰기가 거부되어 입력한 공백이 그대로 남아 있었습니다.",
+    "en": "Whitespace typed into a frequent visitor’s plate is now actually tidied in the setting. The write was previously refused right after a save, so the spacing stayed as typed."
   }
 }

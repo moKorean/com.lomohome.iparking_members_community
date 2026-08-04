@@ -1,6 +1,6 @@
 {
   "id": "com.lomohome.iparking_members_community",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "compatibility": ">=13.0.0",
   "sdk": 3,
   "runtime": "python",

@@ -321,6 +321,21 @@ CAPABILITY_TODAY_COUNT = "iparking_today_count"
 #: in both directions so a disagreement fails off-device instead.
 MAX_FAVORITES = 10
 
+#: How many times to retry writing a normalized plate back into the device settings.
+#:
+#: `Device.set_settings` raises `HomeyError("Cannot set settings while on_settings is still
+#: pending")` while the SDK's `_on_settings` is running, and that method holds the flag across
+#: `await self.on_settings(...)` — which our handler exits only after awaiting the button
+#: reconcile. So a write scheduled from inside the handler reliably wakes up inside the forbidden
+#: window. The flag is cleared in a `finally` right after the handler returns, so one short retry
+#: is normally enough; the rest exist so a slow reconcile cannot silently drop the write.
+#:
+#: Verified against the runtime's own source, extracted from
+#: `ghcr.io/athombv/python-homey-app-runner` (`site-packages/homey/device.py`), not inferred from
+#: behaviour.
+SETTINGS_WRITE_ATTEMPTS = 6
+SETTINGS_WRITE_RETRY_S = 0.25
+
 
 def favorite_name_setting(index: int) -> str:
     """The device-settings key holding 자주 오는 차량 이름 `index` (1-based)."""
