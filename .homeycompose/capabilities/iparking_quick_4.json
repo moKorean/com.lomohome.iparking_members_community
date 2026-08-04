@@ -1,0 +1,12 @@
+{
+  "$comment": "자주 오는 차량 4 — the tile button (`uiComponent: \"button\"` on a boolean is the one interactive control Homey allows on a tile). Five of these are declared up front because Homey has NO dynamic-capability declaration; each device adds and removes them at runtime so a lot with two favourites shows exactly two buttons. The label a user actually sees is NOT this title: it is overwritten per device with set_capability_options(\"iparking_quick_4\", {\"title\": …}) so the tile reads [엄마차 방문 등록]. This title is the fallback for the moment before that call lands and for a runtime that exposes no options setter at all. `getable` is true — unlike Homey's own `button` capability — because the press has to be un-latched afterwards (set back to false) or the button can only ever be pressed once. NO `insights`: a momentary button is not a measurement. See iparking_lib/const.py's MAX_FAVORITES / quick_capability().",
+  "type": "boolean",
+  "title": {
+    "ko": "자주 오는 차량 4 방문 등록",
+    "en": "Register frequent vehicle 4"
+  },
+  "getable": true,
+  "setable": true,
+  "uiComponent": "button",
+  "icon": "/assets/capabilities/visitcar.svg"
+}

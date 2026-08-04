@@ -76,9 +76,25 @@ The Homey app itself is © 2026 Geunwon Mo.
   (on blur), so the normalization is visible rather than silent. "Today" for the visit
   date is always computed in **KST (Korea Standard Time)** — the same regardless of what
   time zone your Homey is in.
-- **Flow action** `register_visitor` — register a visitor from an automation.
-- **Registration history** — view and cancel past registrations from the app settings
-  page.
+- **Two Flow actions** — `register_visitor` ("Register a visitor (choose a date)") takes a
+  plate and an optional visit date; `register_visitor_today` ("Register a visitor (today)")
+  takes only a plate and always registers for today in KST. Both cards go through the same
+  register path and differ only in where the date comes from.
+- **Frequent-vehicle buttons** — the device settings hold ten text fields: **frequent vehicle
+  name 1–5** and **plate number 1–5**. Every slot where **both** halves are filled in and the
+  plate validates gets its own button on the device tile — `[엄마차 방문 등록]` — and pressing it
+  registers that vehicle for **today in KST**. It runs the **same register path** as the Flow
+  cards, so the no-retry write, the "already registered" outcome and the uncertain-outcome
+  guidance all behave identically. Saving normalizes the plate in place so you see what was
+  stored (`12가 3456` → `12가3456`). A half-filled slot or an invalid plate produces no button,
+  and the log says which slot and why.
+- **Registration history** — view and cancel past registrations from the app settings page,
+  **newest visit first**.
+- **Frequent-visitor buttons** — save up to five frequent visitors in the device's advanced
+  settings as a name and plate pair. Every pair that is complete and whose plate validates
+  appears on the device as a button carrying that name (e.g. `엄마차 방문 등록`); pressing it
+  registers for **today in KST**. Whitespace in a plate is normalized and written back into
+  the setting on save, so the cleaned-up value is visible rather than silent.
 - **Already-registered guidance** — re-registering the same plate is reported as a
   distinct "already registered" outcome, not a generic error.
 - **Uncertain-outcome guidance** — if a registration attempt times out and its outcome
@@ -92,6 +108,7 @@ The Homey app itself is © 2026 Geunwon Mo.
 | --- | --- |
 | Sign-in · parking lot name sensor | Supported |
 | Visitor registration (settings page · Flow action) | Supported |
+| Frequent-vehicle buttons (10 device settings → tile buttons) | Supported |
 | Registration history · cancel | Supported |
 | Multi-building / multi-lot accounts | Supported (only 1 building × 1 lot verified live) |
 | Dashboard widget | Planned for v0.1.1 |

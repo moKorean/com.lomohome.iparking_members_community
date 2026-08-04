@@ -1,0 +1,34 @@
+{
+  "title": {
+    "ko": "방문 차량 등록 (오늘)",
+    "en": "Register a visitor (today)"
+  },
+  "titleFormatted": {
+    "ko": "[[car_number]] 오늘 방문 등록",
+    "en": "Register [[car_number]] for today"
+  },
+  "hint": {
+    "ko": "차량번호만 넣으면 됩니다. 날짜는 항상 오늘(한국 시간)이라 잘못 넣을 날짜 칸 자체가 없습니다. 다른 날짜로 등록하려면 '방문 차량 등록 (날짜 지정)' 카드를 쓰세요. 등록 결과는 Homey 알림으로 도착하며, 실제로 등록된 날짜가 함께 표시됩니다. 이 카드는 단지의 실제 출입통제 시스템에 등록을 남깁니다.",
+    "en": "Just the plate number. The date is always today in Korean time, so there is no date field to get wrong. To register another day, use \"Register a visitor (choose a date)\". The outcome arrives as a Homey notification and always states the date that was actually used. This card writes to your building's real access-control system."
+  },
+  "args": [
+    {
+      "type": "device",
+      "name": "device",
+      "filter": "driver_id=visitcar"
+    },
+    {
+      "type": "text",
+      "name": "car_number",
+      "required": true,
+      "title": {
+        "ko": "차량번호",
+        "en": "Plate number"
+      },
+      "placeholder": {
+        "ko": "12가1234",
+        "en": "12가1234"
+      }
+    }
+  ]
+}

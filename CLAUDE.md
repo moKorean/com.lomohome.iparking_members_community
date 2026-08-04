@@ -59,13 +59,19 @@ The Python package is `iparking_lib` (**not** `lib`).
 - `api.py` — settings-page API handlers (`_body()`/`_query()`/`_mask()`). Never persists
   the `access_token` — it is memory-only and crosses the wire in cleartext (see
   disclosures below), so keeping it out of `homey.settings` keeps it out of hub backups.
-- `.homeycompose/` — manifest head, `capabilities/iparking_park_name.json`,
+- `.homeycompose/` — manifest head, `capabilities/iparking_park_name.json`, five
+  `capabilities/iparking_quick_{1..5}.json` tile buttons (declared up front because Homey has
+  no dynamic-capability declaration; each device adds and removes them at runtime, so
+  `MAX_FAVORITES` and these five files have to change together),
   `flow/actions/register_visitor.json`. **Never hand-edit root `app.json`** (generated).
 - `settings/{index.html,form.js}` — the app's **primary UI** (Homey has no free-text tile
   control). `form.js` is a plain module, not tied to the settings page's DOM, so the
   dashboard widget planned for v0.1.1 can mount the same module in ~30 lines instead of a
   rewrite.
 - `drivers/visitcar/` — driver shim, pairing views, assets. One device **per parking lot**.
+  `driver.compose.json` carries the ten 자주 오는 차량 settings (5 이름 + 5 차량번호) in a
+  `favorites` group; the driver's static `capabilities` list stays at one, because a freshly
+  paired device must start with **zero** buttons.
 
 ## Disclosures — not boilerplate, keep them precise
 
@@ -91,6 +97,10 @@ flatten it into "everything is insecure" or drop it into "everything is fine":
 The password in any form; the `access_token` value (presence/length only); raw request
 bodies, encrypted or plain; `memb_name` (a home address, e.g. `101동0000호`); plates —
 mask as `12가****` before any diagnostic output, because diagnostic reports get shared.
+Also **a 자주 오는 차량 nickname**: it is free text the user typed and can carry a person
+(`장모님차`), the tile already shows it to the only person who needs it, and the slot number
+is what a log line actually needs. Notifications are the exception on purpose — they are the
+answer to the person who pressed the button, so they carry the full name *and* the full plate.
 
 ## Build / install
 

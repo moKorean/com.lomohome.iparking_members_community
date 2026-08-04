@@ -524,10 +524,21 @@ class FakeHomey(_Strict):
 
 
 class Device(_Strict):
-    """Stand-in for `homey.device.Device`. Minimal on purpose — the driver/device layer is a
-    separate work item, and this exists so `import homey.device` resolves."""
+    """Stand-in for `homey.device.Device`.
 
-    def __init__(self, *, homey=None, store=None, capabilities=(), name="테스트 기기"):
+    The capability/settings mutators below are the 자주 오는 차량 buttons' whole surface, and
+    every one of them is spelling-selectable for the same reason `FakeFlow` is: **no Python stub
+    ships with the Homey CLI**, so `add_capability` versus `addCapability` cannot be checked off
+    a real SDK for any of them. `sdk_spelling="none"` models a runtime that has neither, which
+    is the branch where a device must still end up with a working 주차장명 sensor.
+
+    `sdk_awaitable=True` makes them return coroutines instead of values — the half of
+    `compat.resolve`'s contract that fails silently when it is wrong.
+    """
+
+    def __init__(self, *, homey=None, store=None, capabilities=(), name="테스트 기기",
+                 settings=None, sdk_spelling="snake", sdk_awaitable=False,
+                 add_capability_error=None):
         self.homey = homey if homey is not None else FakeHomey()
         self.logs = []
         self.availability = []
@@ -535,9 +546,71 @@ class Device(_Strict):
         self._capabilities = list(capabilities)
         self._name = name
         self._values = {}
+        self.settings = dict(settings or {})
+        # Every capability_options payload, in order, so a test can assert the *title* the tile
+        # would show rather than merely that the setter was called.
+        self.capability_options = {}
+        self.setting_writes = []
+        self.listeners = {}
+        self._sdk_awaitable = sdk_awaitable
+        self._add_capability_error = add_capability_error
+        if sdk_spelling in ("snake", "both"):
+            self.get_settings = self._get_settings
+            self.set_settings = self._set_settings
+            self.add_capability = self._add_capability
+            self.remove_capability = self._remove_capability
+            self.set_capability_options = self._set_capability_options
+            self.register_capability_listener = self._register_capability_listener
+        if sdk_spelling in ("camel", "both"):
+            self.getSettings = self._get_settings                            # noqa: N815
+            self.setSettings = self._set_settings                            # noqa: N815
+            self.addCapability = self._add_capability                        # noqa: N815
+            self.removeCapability = self._remove_capability                  # noqa: N815
+            self.setCapabilityOptions = self._set_capability_options         # noqa: N815
+            self.registerCapabilityListener = self._register_capability_listener  # noqa: N815
 
     def get_store(self) -> dict:
         return dict(self._store)
+
+    # --- the capability/settings surface the tile buttons ride on ---
+
+    def _get_settings(self):
+        return _maybe_async(dict(self.settings), self._sdk_awaitable)
+
+    def _set_settings(self, values):
+        # The real SDK merges a partial dict rather than replacing the whole set.
+        self.settings.update(values)
+        self.setting_writes.append(dict(values))
+        return _maybe_async(None, self._sdk_awaitable)
+
+    def _add_capability(self, capability):
+        if self._add_capability_error is not None:
+            raise self._add_capability_error
+        if capability not in self._capabilities:
+            self._capabilities.append(capability)
+        return _maybe_async(None, self._sdk_awaitable)
+
+    def _remove_capability(self, capability):
+        if capability in self._capabilities:
+            self._capabilities.remove(capability)
+        self._values.pop(capability, None)
+        self.capability_options.pop(capability, None)
+        return _maybe_async(None, self._sdk_awaitable)
+
+    def _set_capability_options(self, capability, options):
+        if capability not in self._capabilities:
+            # The real SDK has no capability to hang options on either.
+            raise ValueError(f"device has no capability {capability!r}")
+        self.capability_options.setdefault(capability, {}).update(options)
+        return _maybe_async(None, self._sdk_awaitable)
+
+    def _register_capability_listener(self, capability, fn):
+        self.listeners[capability] = fn
+
+    async def press(self, capability, value=True):
+        """Press a tile button the way Homey does: set the value, then fire the listener."""
+        self._values[capability] = value
+        return await self.listeners[capability](value, {})
 
     def get_capabilities(self) -> list:
         return list(self._capabilities)

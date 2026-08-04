@@ -561,6 +561,10 @@ async def get_history(homey, **kwargs) -> dict:
 
     Plates come back unmasked here, and only here: this is the user reading their own
     registrations, and a masked table cannot be acted on. Every log line still masks.
+
+    Rows leave here **newest visit first** — see `_newest_first`. The vendor answers
+    oldest-first, which puts the rows a user actually cares about (the visits that have not
+    happened yet) at the bottom of the table.
     """
     query = _query(kwargs)
     park_seq = _int(query.get("park_seq") or query.get("parkSeq"))
@@ -601,9 +605,35 @@ async def get_history(homey, **kwargs) -> dict:
                 "is_active": row.is_active,
                 "park_name": row.park_name,
             }
-            for row in rows
+            for row in _newest_first(rows)
         ],
     }
+
+
+def _newest_first(rows: list) -> list:
+    """등록 내역 ordered by visit date descending, `invt_seq` descending within a date.
+
+    **Sorted here rather than in `settings/form.js`** so the order is a property of the
+    handler's answer instead of one renderer's habit: the settings table today, the v0.1.1
+    widget and any later Flow consumer all read this one list, and each of them re-deriving
+    the order is how two views of the same account end up disagreeing about which
+    registration is the latest. It also keeps `form.js` a renderer — `paginate()` slices
+    whatever it is handed, so page 1 is now the newest page with no change there at all.
+
+    `invitation_date` is the wire format `yyyyMMdd`, so a plain string sort **is** a date
+    sort — no parsing, and therefore no way for the malformed row `_human_date` already
+    tolerates to raise here or to be dropped.
+
+    `invt_seq` descending is the tiebreaker, because several registrations on one date is the
+    ordinary case (a household registering three cars for the same visit) and the vendor's
+    own order within a date is not something to rely on. `invt_seq` is server-assigned and
+    increasing, so the highest is the one registered last.
+    """
+    return sorted(
+        rows,
+        key=lambda row: (str(row.invitation_date), _int(row.invt_seq)),
+        reverse=True,
+    )
 
 
 def _human_date(api_date: str, language: str) -> str:

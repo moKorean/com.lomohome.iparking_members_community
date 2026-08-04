@@ -7,6 +7,128 @@
   "capabilities": [
     "iparking_park_name"
   ],
+  "settings": [
+    {
+      "id": "favorites",
+      "type": "group",
+      "label": {
+        "ko": "자주 오는 차량",
+        "en": "Frequent vehicles"
+      },
+      "children": [
+        {
+          "id": "fav_name_1",
+          "type": "text",
+          "label": {
+            "ko": "자주 오는 차량 이름 1",
+            "en": "Frequent vehicle name 1"
+          },
+          "value": ""
+        },
+        {
+          "id": "fav_plate_1",
+          "type": "text",
+          "label": {
+            "ko": "차량번호 1",
+            "en": "Plate number 1"
+          },
+          "value": "",
+          "hint": {
+            "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+            "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+          }
+        },
+        {
+          "id": "fav_name_2",
+          "type": "text",
+          "label": {
+            "ko": "자주 오는 차량 이름 2",
+            "en": "Frequent vehicle name 2"
+          },
+          "value": ""
+        },
+        {
+          "id": "fav_plate_2",
+          "type": "text",
+          "label": {
+            "ko": "차량번호 2",
+            "en": "Plate number 2"
+          },
+          "value": "",
+          "hint": {
+            "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+            "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+          }
+        },
+        {
+          "id": "fav_name_3",
+          "type": "text",
+          "label": {
+            "ko": "자주 오는 차량 이름 3",
+            "en": "Frequent vehicle name 3"
+          },
+          "value": ""
+        },
+        {
+          "id": "fav_plate_3",
+          "type": "text",
+          "label": {
+            "ko": "차량번호 3",
+            "en": "Plate number 3"
+          },
+          "value": "",
+          "hint": {
+            "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+            "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+          }
+        },
+        {
+          "id": "fav_name_4",
+          "type": "text",
+          "label": {
+            "ko": "자주 오는 차량 이름 4",
+            "en": "Frequent vehicle name 4"
+          },
+          "value": ""
+        },
+        {
+          "id": "fav_plate_4",
+          "type": "text",
+          "label": {
+            "ko": "차량번호 4",
+            "en": "Plate number 4"
+          },
+          "value": "",
+          "hint": {
+            "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+            "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+          }
+        },
+        {
+          "id": "fav_name_5",
+          "type": "text",
+          "label": {
+            "ko": "자주 오는 차량 이름 5",
+            "en": "Frequent vehicle name 5"
+          },
+          "value": ""
+        },
+        {
+          "id": "fav_plate_5",
+          "type": "text",
+          "label": {
+            "ko": "차량번호 5",
+            "en": "Plate number 5"
+          },
+          "value": "",
+          "hint": {
+            "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+            "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+          }
+        }
+      ]
+    }
+  ],
   "platforms": [
     "local"
   ],
@@ -19,15 +141,24 @@
     "xlarge": "/drivers/visitcar/assets/images/xlarge.png"
   },
   "pair": [
-    { "id": "start" },
+    {
+      "id": "start"
+    },
     {
       "id": "list_devices",
       "template": "list_devices",
-      "navigation": { "next": "add_devices" }
+      "navigation": {
+        "next": "add_devices"
+      }
     },
-    { "id": "add_devices", "template": "add_devices" }
+    {
+      "id": "add_devices",
+      "template": "add_devices"
+    }
   ],
   "repair": [
-    { "id": "reconnect" }
+    {
+      "id": "reconnect"
+    }
   ]
 }

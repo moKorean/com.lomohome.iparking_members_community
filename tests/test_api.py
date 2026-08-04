@@ -556,10 +556,10 @@ class _HistoryApi(_RegisterApi):
         self.cancelled.append(invt_seq)
 
 
-def _row(car, date_, status):
+def _row(car, date_, status, seq=3184551):
     from iparking_lib.iparking.client import HistoryRow
 
-    return HistoryRow(invt_seq=3184551, car_number=car, invitation_date=date_,
+    return HistoryRow(invt_seq=seq, car_number=car, invitation_date=date_,
                       status=status, park_name="예시동 샘플아파트[출입통제A]")
 
 
@@ -579,6 +579,62 @@ def test_history_keys_each_row_on_is_active_not_on_presence(make_homey):
     assert [row["is_active"] for row in rows] == [True, False]
     assert rows[1]["status"] == "CANCEL"
     assert rows[1]["invt_seq"] == 3184551
+
+
+def test_history_rows_come_out_newest_first(make_homey):
+    """The vendor answers oldest-first, which buries the rows the user came to look at — the
+    visits that have not happened yet — at the bottom of the table. Sorted in the handler, so
+    the settings table, the widget and any later consumer all read the same order."""
+    session = _HistoryApi(rows=[
+        _row(PLATE, "20260601", "RESERVE"),
+        _row("34나5678", "20260805", "RESERVE"),
+        _row("56다6789", "20260713", "RESERVE"),
+    ])
+    homey = make_homey(api=session)
+
+    rows = asyncio.run(api.get_history(
+        homey, query={"park_seq": PARK_SEQ, "stor_seq": STOR_SEQ}
+    ))["rows"]
+
+    assert [row["invitation_date"] for row in rows] == ["20260805", "20260713", "20260601"]
+
+
+def test_history_breaks_a_same_date_tie_on_invt_seq_descending(make_homey):
+    """Several registrations on one date is the ordinary case — a household registering three
+    cars for the same visit. `invt_seq` is server-assigned and increasing, so the highest is
+    the one registered last, and using it makes the within-date order deterministic instead of
+    whatever the response happened to arrive in."""
+    session = _HistoryApi(rows=[
+        _row(PLATE, "20260805", "RESERVE", seq=3184551),
+        _row("34나5678", "20260805", "RESERVE", seq=3184553),
+        _row("56다6789", "20260805", "RESERVE", seq=3184552),
+    ])
+    homey = make_homey(api=session)
+
+    rows = asyncio.run(api.get_history(
+        homey, query={"park_seq": PARK_SEQ, "stor_seq": STOR_SEQ}
+    ))["rows"]
+
+    assert [row["invt_seq"] for row in rows] == [3184553, 3184552, 3184551]
+    assert [row["car_number"] for row in rows] == ["34나5678", "56다6789", PLATE]
+
+
+def test_history_sorts_a_row_whose_date_will_not_parse_without_dropping_it(make_homey):
+    """`invitation_date` is `yyyyMMdd`, so the sort is a string sort and needs no parsing —
+    which is what keeps the malformed row `_human_date` already tolerates from raising here or
+    from vanishing out of the table."""
+    session = _HistoryApi(rows=[
+        _row(PLATE, "20260805", "RESERVE"),
+        _row("34나5678", "not-a-date", "RESERVE"),
+    ])
+    homey = make_homey(api=session)
+
+    rows = asyncio.run(api.get_history(
+        homey, query={"park_seq": PARK_SEQ, "stor_seq": STOR_SEQ}
+    ))["rows"]
+
+    assert len(rows) == 2
+    assert {row["car_number"] for row in rows} == {PLATE, "34나5678"}
 
 
 def test_history_returns_plates_unmasked_because_the_user_owns_them(make_homey):

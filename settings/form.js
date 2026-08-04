@@ -39,6 +39,11 @@
  * response, so there is nothing to page over the network — `paginate()` slices an array that is
  * already complete. And `/history` returns no `total` aggregate (`resultData.total` came back
  * `[]` even on that 43-row range), so there is no summary row to render.
+ *
+ * **Row order is the handler's, not this module's.** `/history` answers newest visit first
+ * (`api._newest_first`), so `paginate()` slicing in received order puts the upcoming visits on
+ * page 1. Do not sort again here: a second ordering would be a second thing to keep in step
+ * with the widget, which reads the same handler.
  */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) {

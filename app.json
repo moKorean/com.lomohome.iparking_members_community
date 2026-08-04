@@ -1,7 +1,7 @@
 {
   "_comment": "This file is generated. Please edit .homeycompose/app.json instead.",
   "id": "com.lomohome.iparking_members_community",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "compatibility": ">=13.0.0",
   "sdk": 3,
   "runtime": "python",
@@ -102,16 +102,16 @@
     "actions": [
       {
         "title": {
-          "ko": "방문차량 등록",
-          "en": "Register a visitor vehicle"
+          "ko": "방문 차량 등록 (날짜 지정)",
+          "en": "Register a visitor (choose a date)"
         },
         "titleFormatted": {
           "ko": "[[car_number]] 방문 등록 (방문 예정일 [[visit_date]])",
           "en": "Register [[car_number]] for [[visit_date]]"
         },
         "hint": {
-          "ko": "차량번호만 넣으면 오늘 방문으로 등록합니다. 방문 예정일을 함께 넣으면 그 날짜로 등록합니다. 등록 결과는 Homey 알림으로 도착하며, 실제로 등록된 날짜가 함께 표시됩니다. 이 카드는 단지의 실제 출입통제 시스템에 등록을 남깁니다.",
-          "en": "With just a plate number this registers a visit for today. Add a visit date to register that day instead. The outcome arrives as a Homey notification and always states the date that was actually used. This card writes to your building's real access-control system."
+          "ko": "방문 예정일을 넣으면 그 날짜로 등록합니다. 비워 두면 오늘로 등록하지만, 오늘만 쓸 거라면 날짜 칸이 없는 '방문 차량 등록 (오늘)' 카드가 더 안전합니다. 등록 결과는 Homey 알림으로 도착하며, 실제로 등록된 날짜가 함께 표시됩니다. 이 카드는 단지의 실제 출입통제 시스템에 등록을 남깁니다.",
+          "en": "Add a visit date to register that day. Leaving it empty registers today, but if today is all you need, \"Register a visitor (today)\" has no date field to get wrong. The outcome arrives as a Homey notification and always states the date that was actually used. This card writes to your building's real access-control system."
         },
         "args": [
           {
@@ -143,6 +143,41 @@
           }
         ],
         "id": "register_visitor"
+      },
+      {
+        "title": {
+          "ko": "방문 차량 등록 (오늘)",
+          "en": "Register a visitor (today)"
+        },
+        "titleFormatted": {
+          "ko": "[[car_number]] 오늘 방문 등록",
+          "en": "Register [[car_number]] for today"
+        },
+        "hint": {
+          "ko": "차량번호만 넣으면 됩니다. 날짜는 항상 오늘(한국 시간)이라 잘못 넣을 날짜 칸 자체가 없습니다. 다른 날짜로 등록하려면 '방문 차량 등록 (날짜 지정)' 카드를 쓰세요. 등록 결과는 Homey 알림으로 도착하며, 실제로 등록된 날짜가 함께 표시됩니다. 이 카드는 단지의 실제 출입통제 시스템에 등록을 남깁니다.",
+          "en": "Just the plate number. The date is always today in Korean time, so there is no date field to get wrong. To register another day, use \"Register a visitor (choose a date)\". The outcome arrives as a Homey notification and always states the date that was actually used. This card writes to your building's real access-control system."
+        },
+        "args": [
+          {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=visitcar"
+          },
+          {
+            "type": "text",
+            "name": "car_number",
+            "required": true,
+            "title": {
+              "ko": "차량번호",
+              "en": "Plate number"
+            },
+            "placeholder": {
+              "ko": "12가1234",
+              "en": "12가1234"
+            }
+          }
+        ],
+        "id": "register_visitor_today"
       }
     ]
   },
@@ -155,6 +190,128 @@
       "class": "sensor",
       "capabilities": [
         "iparking_park_name"
+      ],
+      "settings": [
+        {
+          "id": "favorites",
+          "type": "group",
+          "label": {
+            "ko": "자주 오는 차량",
+            "en": "Frequent vehicles"
+          },
+          "children": [
+            {
+              "id": "fav_name_1",
+              "type": "text",
+              "label": {
+                "ko": "자주 오는 차량 이름 1",
+                "en": "Frequent vehicle name 1"
+              },
+              "value": ""
+            },
+            {
+              "id": "fav_plate_1",
+              "type": "text",
+              "label": {
+                "ko": "차량번호 1",
+                "en": "Plate number 1"
+              },
+              "value": "",
+              "hint": {
+                "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+                "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+              }
+            },
+            {
+              "id": "fav_name_2",
+              "type": "text",
+              "label": {
+                "ko": "자주 오는 차량 이름 2",
+                "en": "Frequent vehicle name 2"
+              },
+              "value": ""
+            },
+            {
+              "id": "fav_plate_2",
+              "type": "text",
+              "label": {
+                "ko": "차량번호 2",
+                "en": "Plate number 2"
+              },
+              "value": "",
+              "hint": {
+                "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+                "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+              }
+            },
+            {
+              "id": "fav_name_3",
+              "type": "text",
+              "label": {
+                "ko": "자주 오는 차량 이름 3",
+                "en": "Frequent vehicle name 3"
+              },
+              "value": ""
+            },
+            {
+              "id": "fav_plate_3",
+              "type": "text",
+              "label": {
+                "ko": "차량번호 3",
+                "en": "Plate number 3"
+              },
+              "value": "",
+              "hint": {
+                "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+                "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+              }
+            },
+            {
+              "id": "fav_name_4",
+              "type": "text",
+              "label": {
+                "ko": "자주 오는 차량 이름 4",
+                "en": "Frequent vehicle name 4"
+              },
+              "value": ""
+            },
+            {
+              "id": "fav_plate_4",
+              "type": "text",
+              "label": {
+                "ko": "차량번호 4",
+                "en": "Plate number 4"
+              },
+              "value": "",
+              "hint": {
+                "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+                "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+              }
+            },
+            {
+              "id": "fav_name_5",
+              "type": "text",
+              "label": {
+                "ko": "자주 오는 차량 이름 5",
+                "en": "Frequent vehicle name 5"
+              },
+              "value": ""
+            },
+            {
+              "id": "fav_plate_5",
+              "type": "text",
+              "label": {
+                "ko": "차량번호 5",
+                "en": "Plate number 5"
+              },
+              "value": "",
+              "hint": {
+                "ko": "예시) 12가1234, 임1234, 임123456, 외교123456. 공백은 저장할 때 자동으로 지워집니다. 같은 번호의 이름 칸까지 채워야 기기 화면에 버튼이 생깁니다.",
+                "en": "e.g. 12가1234, 임1234, 임123456, 외교123456. Spaces are removed for you when you save. The button appears only once the name field with the same number is filled in too."
+              }
+            }
+          ]
+        }
       ],
       "platforms": [
         "local"
@@ -202,6 +359,61 @@
       "setable": false,
       "uiComponent": "sensor",
       "icon": "/assets/capabilities/parking.svg"
+    },
+    "iparking_quick_1": {
+      "type": "boolean",
+      "title": {
+        "ko": "자주 오는 차량 1 방문 등록",
+        "en": "Register frequent vehicle 1"
+      },
+      "getable": true,
+      "setable": true,
+      "uiComponent": "button",
+      "icon": "/assets/capabilities/visitcar.svg"
+    },
+    "iparking_quick_2": {
+      "type": "boolean",
+      "title": {
+        "ko": "자주 오는 차량 2 방문 등록",
+        "en": "Register frequent vehicle 2"
+      },
+      "getable": true,
+      "setable": true,
+      "uiComponent": "button",
+      "icon": "/assets/capabilities/visitcar.svg"
+    },
+    "iparking_quick_3": {
+      "type": "boolean",
+      "title": {
+        "ko": "자주 오는 차량 3 방문 등록",
+        "en": "Register frequent vehicle 3"
+      },
+      "getable": true,
+      "setable": true,
+      "uiComponent": "button",
+      "icon": "/assets/capabilities/visitcar.svg"
+    },
+    "iparking_quick_4": {
+      "type": "boolean",
+      "title": {
+        "ko": "자주 오는 차량 4 방문 등록",
+        "en": "Register frequent vehicle 4"
+      },
+      "getable": true,
+      "setable": true,
+      "uiComponent": "button",
+      "icon": "/assets/capabilities/visitcar.svg"
+    },
+    "iparking_quick_5": {
+      "type": "boolean",
+      "title": {
+        "ko": "자주 오는 차량 5 방문 등록",
+        "en": "Register frequent vehicle 5"
+      },
+      "getable": true,
+      "setable": true,
+      "uiComponent": "button",
+      "icon": "/assets/capabilities/visitcar.svg"
     }
   }
 }

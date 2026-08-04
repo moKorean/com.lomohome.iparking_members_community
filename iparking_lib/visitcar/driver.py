@@ -1,4 +1,4 @@
-"""Pairing for the `visitcar` driver, and the app's one Flow card registration.
+"""Pairing for the `visitcar` driver, and its two Flow card registrations.
 
 **One device per parking lot.** Pairing calls `enumerate_lots()`, which iterates every
 `invitation_authorization_list` entry × every lot, so a multi-store account generalizes with
@@ -18,10 +18,19 @@ building office can grant the permission later. The 주차장명 sensor is usefu
 refusing to pair such a store would remove a working sensor to prevent a write that is already
 prevented.
 
-The Flow card is registered here rather than in `app.py` for the same reason navien does it:
+The Flow cards are registered here rather than in `app.py` for the same reason navien does it:
 cards are app-global but every one of them carries a `device` arg filtered to this driver, so
 the driver is the object that knows they exist. Registration is guarded — a card that fails to
 bind must not take driver init down with it, because that would cost the sensor too.
+
+**Two cards, one write path.** `register_visitor` takes a plate plus an optional 방문 예정일;
+`register_visitor_today` takes a plate and nothing else. Both listeners resolve the targeted
+device and call the same `VisitCarDevice_.flow_register`; they differ only in where
+`visit_date` comes from, and the today card's contribution is the empty string. The card the
+maintainer asked for is a *usability* fix, not a functional one — the dated card already
+falls back to today when its field is empty, but an editor that shows a date field invites a
+wrong date, and a wrong day on access control fails silently at the gate. Removing the field
+is the whole point; duplicating the register logic to remove it would be the mistake.
 """
 
 from homey import driver
@@ -29,6 +38,7 @@ from homey import driver
 from iparking_lib import compat, pairing
 from iparking_lib.const import (
     FLOW_REGISTER_VISITOR,
+    FLOW_REGISTER_VISITOR_TODAY,
     STORE_LOT_ID,
     STORE_PARK_NAME,
     STORE_PARK_SEQ,
@@ -51,17 +61,24 @@ class VisitCarDriver(driver.Driver):
         self._register_flow_cards()
 
     def _register_flow_cards(self) -> None:
-        """Bind `register_visitor` to the targeted device's own `flow_register`.
+        """Bind both register cards to the targeted device's own `flow_register`.
 
-        The run listener takes `**kwargs` because Homey passes extras such as `manual`
+        Each card is bound in its own `try`: they are independent, so a spelling the runtime
+        does not expose for one must not cost the other its listener.
+
+        The run listeners take `**kwargs` because Homey passes extras such as `manual`
         alongside `(args, state)`; a handler without it errors the card out at run time, which
         is the kind of failure that only shows up when a user's Flow fires.
         """
-        try:
-            card = compat.flow_card(self.homey, "action", FLOW_REGISTER_VISITOR)
-            compat.register_run_listener(card, self._on_register)
-        except Exception as exc:
-            self.log(f"iparking: flow card registration failed: {exc}")
+        for card_id, listener in (
+            (FLOW_REGISTER_VISITOR, self._on_register),
+            (FLOW_REGISTER_VISITOR_TODAY, self._on_register_today),
+        ):
+            try:
+                card = compat.flow_card(self.homey, "action", card_id)
+                compat.register_run_listener(card, listener)
+            except Exception as exc:
+                self.log(f"iparking: flow card registration failed: {card_id}: {exc}")
 
     async def _on_register(self, args=None, state=None, **kwargs) -> bool:
         """`register_visitor`'s run listener. **This writes to a building.**
@@ -71,17 +88,39 @@ class VisitCarDriver(driver.Driver):
         duplicate that must not read as a failure — lives in `VisitCarDevice_.flow_register`,
         next to the store fields it needs.
         """
-        values = args if isinstance(args, dict) else {}
-        target = values.get("device")
-        if target is None:
-            raise Exception("이 Flow 카드에 등록할 주차장 기기를 선택하세요.")
-        return await target.flow_register(
+        values = _values(args)
+        return await self._target(values).flow_register(
             car_number=str(values.get("car_number") or ""),
             # `""` rather than `None` when the arg was left empty, because that is what
             # `required: false` delivers and it is the whole two-mode behaviour: empty means
             # today in KST, resolved through the same parse path a supplied date takes.
             visit_date=str(values.get("visit_date") or ""),
         )
+
+    async def _on_register_today(self, args=None, state=None, **kwargs) -> bool:
+        """`register_visitor_today`'s run listener. **This writes to a building.**
+
+        The same `flow_register`, one argument short. The card has no `visit_date` arg at all,
+        so there is nothing to read and nothing to validate here: the empty string is the
+        card's whole contribution, and `client.register` turns it into `dates.today_kst()`
+        through the identical parse and window path a supplied date takes.
+
+        No date logic lives here on purpose. A second card that resolved "today" itself would
+        be a second answer to "which day is it?" — and the two would disagree the first time
+        one of them consulted a clock other than KST.
+        """
+        values = _values(args)
+        return await self._target(values).flow_register(
+            car_number=str(values.get("car_number") or ""),
+            visit_date="",
+        )
+
+    def _target(self, values: dict) -> object:
+        """The device this card run is aimed at, or a sentence saying to pick one."""
+        target = values.get("device")
+        if target is None:
+            raise Exception("이 Flow 카드에 등록할 주차장 기기를 선택하세요.")
+        return target
 
     async def on_pair(self, session) -> None:
         pairing.install(self, session, self._build_devices)
@@ -120,3 +159,8 @@ class VisitCarDriver(driver.Driver):
             }
             for lot in lots
         ]
+
+
+def _values(args) -> dict:
+    """A card run's argument dict, tolerating whatever Homey actually passed as `args`."""
+    return args if isinstance(args, dict) else {}

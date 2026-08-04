@@ -212,10 +212,17 @@ MAX_POLL_FAILURES = 2
 
 # --- Flow cards -------------------------------------------------------------
 
-#: `.homeycompose/flow/actions/register_visitor.json`. The app's **only** Flow card: the
-#: settings page is the primary surface, and every extra card here would be another route to
-#: a write against a real building's access control.
+#: `.homeycompose/flow/actions/register_visitor.json`. Plate + an **optional** 방문 예정일.
 FLOW_REGISTER_VISITOR = "register_visitor"
+
+#: `.homeycompose/flow/actions/register_visitor_today.json`. Plate only, always today in KST.
+#:
+#: Not a second code path — both cards bind to the same `VisitCarDevice_.flow_register`, and
+#: this one simply passes no date. It exists because the card above, with its optional `date`
+#: field, still *shows* that field in the Flow editor: an empty one already means today, but a
+#: wrongly filled one silently registers the wrong day and the guest finds out at a closed
+#: gate. This card removes the field, not the behaviour. Two cards, still one write path.
+FLOW_REGISTER_VISITOR_TODAY = "register_visitor_today"
 
 # --- Settings keys ----------------------------------------------------------
 #
@@ -244,7 +251,7 @@ STORE_PARK_NAME = "park_name"
 #: both the driver and the device already agree on.
 STORE_LOT_ID = "lot_id"
 
-#: The app's one and only capability — 주차장명 as a read-only string sensor (requirement 4).
+#: 주차장명 as a read-only string sensor (requirement 4).
 #:
 #: **It carries no `insights`, and that is not an oversight.** Homey's schema does permit
 #: `insights` on a `string` capability, so a future maintainer scanning
@@ -254,3 +261,44 @@ STORE_LOT_ID = "lot_id"
 #: not a measurement of anything. Adding it would produce an empty graph on the device page
 #: and nothing else.
 CAPABILITY_PARK_NAME = "iparking_park_name"
+
+# --- 자주 오는 차량: the device's own tile buttons ----------------------------
+#
+# Ten device settings (5 names + 5 plates) and five capabilities, and the asymmetry between
+# those two numbers is the whole mechanism. Homey allows exactly one interactive control on a
+# tile — a `boolean` capability with `uiComponent: "button"` — and it has **no
+# dynamic-capability declaration**: a capability that is not in `app.json` cannot be added to
+# a device at all. So five schemas are declared up front and each device adds or removes them
+# at runtime (`add_capability` / `remove_capability`), which is what lets a lot with two
+# favourites show exactly two buttons instead of five, three of them dead.
+#
+# The button's **label** is not its schema title. It is overwritten per device with
+# `set_capability_options(..., {"title": …})`, because `엄마차` is user input and no static
+# manifest can carry it. That call is the one part of this feature that cannot be verified
+# off-device; see `device._sdk_call`.
+
+#: How many favourite slots a device has. Five is a manifest fact before it is a preference:
+#: raising it means five more capability JSON files and ten more settings fields, so it is
+#: **not** a tunable — `MAX_FAVORITES` and `.homeycompose/capabilities/iparking_quick_*.json`
+#: have to be changed together or a device asks for a capability the app never declared.
+MAX_FAVORITES = 5
+
+
+def favorite_name_setting(index: int) -> str:
+    """The device-settings key holding 자주 오는 차량 이름 `index` (1-based)."""
+    return f"fav_name_{int(index)}"
+
+
+def favorite_plate_setting(index: int) -> str:
+    """The device-settings key holding 차량번호 `index` (1-based)."""
+    return f"fav_plate_{int(index)}"
+
+
+def quick_capability(index: int) -> str:
+    """The tile-button capability id for favourite slot `index` (1-based).
+
+    Spelled here rather than inline anywhere so the device, the tests and the five JSON
+    schemas cannot drift: a typo produces a capability the app never declared, which the SDK
+    refuses at `add_capability` time — i.e. only on a hub.
+    """
+    return f"iparking_quick_{int(index)}"

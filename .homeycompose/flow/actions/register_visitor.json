@@ -1,15 +1,15 @@
 {
   "title": {
-    "ko": "방문차량 등록",
-    "en": "Register a visitor vehicle"
+    "ko": "방문 차량 등록 (날짜 지정)",
+    "en": "Register a visitor (choose a date)"
   },
   "titleFormatted": {
     "ko": "[[car_number]] 방문 등록 (방문 예정일 [[visit_date]])",
     "en": "Register [[car_number]] for [[visit_date]]"
   },
   "hint": {
-    "ko": "차량번호만 넣으면 오늘 방문으로 등록합니다. 방문 예정일을 함께 넣으면 그 날짜로 등록합니다. 등록 결과는 Homey 알림으로 도착하며, 실제로 등록된 날짜가 함께 표시됩니다. 이 카드는 단지의 실제 출입통제 시스템에 등록을 남깁니다.",
-    "en": "With just a plate number this registers a visit for today. Add a visit date to register that day instead. The outcome arrives as a Homey notification and always states the date that was actually used. This card writes to your building's real access-control system."
+    "ko": "방문 예정일을 넣으면 그 날짜로 등록합니다. 비워 두면 오늘로 등록하지만, 오늘만 쓸 거라면 날짜 칸이 없는 '방문 차량 등록 (오늘)' 카드가 더 안전합니다. 등록 결과는 Homey 알림으로 도착하며, 실제로 등록된 날짜가 함께 표시됩니다. 이 카드는 단지의 실제 출입통제 시스템에 등록을 남깁니다.",
+    "en": "Add a visit date to register that day. Leaving it empty registers today, but if today is all you need, \"Register a visitor (today)\" has no date field to get wrong. The outcome arrives as a Homey notification and always states the date that was actually used. This card writes to your building's real access-control system."
   },
   "args": [
     {
