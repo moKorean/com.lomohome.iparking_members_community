@@ -617,6 +617,33 @@ def test_the_notification_helper_tolerates_every_plausible_sdk_contract(
     ]
 
 
+def test_a_permissive_runtime_gets_a_plain_string_not_a_dict(make_device):
+    """The regression guard for the blank-timeline bug, and the reason it went unnoticed.
+
+    The real hub takes one positional argument of any type and stores it in `excerpt` verbatim.
+    Under that contract the dict shape does not raise, so the old ordering posted
+    `excerpt={'excerpt': …}` — every row in the user's timeline was blank while the log said
+    the notification had been posted. "It did not raise" was the only success signal, and it
+    was not one.
+
+    Ordering is what fixes it, so ordering is what this pins: with a runtime that would accept
+    either, the plain string has to win.
+    """
+    notifications = FakeNotifications(spelling="snake", shape="permissive")
+    dev, _homey = make_device(api=_StubApi(), notifications=notifications)
+
+    asyncio.run(dev.flow_register(car_number=PLATE, visit_date=""))
+
+    assert len(notifications.excerpts) == 1
+    posted = notifications.excerpts[0]
+    assert isinstance(posted, str), (
+        f"the timeline renders blank unless this is a string: {posted!r}"
+    )
+    assert posted == i18n.translate(
+        "flow_registered", "ko", plate=PLATE, date=dates.format_kst_human(dates.today_api())
+    )
+
+
 def test_a_missing_notifications_manager_does_not_fail_the_registration(make_device):
     """A registration that succeeded must never be reported as failed because a notification
     could not be posted — the write has already happened at the building."""
@@ -1574,7 +1601,11 @@ def test_a_runtime_with_no_capability_mutators_still_gets_its_sensor(make_device
 
     assert dev.get_capability_value(CAPABILITY_PARK_NAME) == PARK_NAME
     assert any("next poll in" in line for line in dev.logs)
-    assert any("exposes no get_settings" in line for line in dev.logs)
+    # The message says what was observed — that neither accessor exists — rather than guessing
+    # why. An earlier version logged "exposes no get_settings" whenever the settings came back
+    # unusable *for any reason*, and on the real hub the method was right there while a too-narrow
+    # isinstance check discarded its answer. The log then pointed away from the actual cause.
+    assert any("has neither get_settings nor getSettings" in line for line in dev.logs)
 
 
 def test_a_failing_add_capability_does_not_take_the_device_down(make_device):
@@ -1664,3 +1695,5 @@ def test_the_settings_write_is_the_only_runtime_write_and_the_store_is_still_unt
 
     assert "set_store_value(" not in source.replace("`set_store_value`", "")
     assert '"set_settings", "setSettings"' in source
+
+

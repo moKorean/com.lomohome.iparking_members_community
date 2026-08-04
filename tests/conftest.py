@@ -493,6 +493,15 @@ class FakeNotifications(_Strict):
             if kwargs or len(args) != 1 or not isinstance(args[0], dict):
                 raise TypeError("create_notification() expects one options dict")
             excerpt = args[0].get("excerpt")
+        elif self._shape == "permissive":
+            # What the real hub does, measured 2026-08-04: one positional argument of **any**
+            # type, stored in `excerpt` verbatim. This contract is why the dict shape used to
+            # "succeed" — nothing raised, the log said ok, and the timeline rendered a blank
+            # row because the field held a dict. Every other shape here raises on a wrong
+            # call, so none of them could reproduce that, and no test caught it.
+            if kwargs or len(args) != 1:
+                raise TypeError("create_notification() expects one positional argument")
+            excerpt = args[0]
         else:  # positional string
             if kwargs or len(args) != 1 or not isinstance(args[0], str):
                 raise TypeError("create_notification() expects one string")

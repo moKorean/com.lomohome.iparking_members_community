@@ -706,7 +706,19 @@ class VisitCarDevice_(device.Device):
             await self._set(capability, False)
 
     async def _device_settings(self) -> dict:
-        """This device's settings, tolerating either SDK spelling. `{}` if neither exists."""
+        """This device's settings as a plain dict. `{}` only when they are truly unreadable.
+
+        Coerces with `dict(values)` rather than testing `isinstance(values, dict)`. That
+        distinction cost a working feature once: the runtime's `get_settings()` returns a
+        mapping that is **not** a `dict` subclass, so an `isinstance` guard discarded a perfectly
+        good answer, fell through the loop, and logged "this Device exposes no get_settings" —
+        while `dir(self)` showed the bound method right there. Every button silently vanished on
+        restart and the log actively pointed away from the cause.
+
+        Two lessons are worth keeping in the code. A tolerance check should accept anything it
+        can *use*, not only the one type it expected; and a fallback message must describe what
+        was observed, not assume why — hence the distinct log lines below.
+        """
         for name in ("get_settings", "getSettings"):
             fn = getattr(self, name, None)
             if fn is None:
@@ -716,9 +728,18 @@ class VisitCarDevice_(device.Device):
             except Exception as exc:
                 self.log(f"iparking: {name}() failed: {exc}")
                 return {}
-            if isinstance(values, dict):
-                return values
-        self.log("iparking: this Device exposes no get_settings; no 자주 오는 차량 buttons")
+            try:
+                return dict(values)
+            except (TypeError, ValueError):
+                self.log(
+                    f"iparking: {name}() returned {type(values).__name__}, "
+                    "which is not usable as a mapping"
+                )
+                return {}
+        self.log(
+            "iparking: this Device has neither get_settings nor getSettings; "
+            "자주 오는 차량 buttons unavailable"
+        )
         return {}
 
     async def _sdk_call(self, names: tuple[str, ...], *args, what: str = "") -> bool:
@@ -754,13 +775,26 @@ class VisitCarDevice_(device.Device):
         return False
 
     async def _notify(self, text: str) -> None:
-        """Create a Homey notification, tolerating whatever this build calls it.
+        """Create a Homey notification.
 
-        The Python SDK's notification surface is not pinned anywhere we can read — the Node
-        API is `homey.notifications.createNotification({excerpt})` and the Python bindings for
-        the managers this app does use are snake_case with plain arguments — so both spellings
-        and all three plausible call shapes are tried, in the same spirit as
-        `compat.flow_card`. The shape that worked is logged, so one real Flow run settles it.
+        **Settled on hardware 2026-08-04: the call is `create_notification(text)` — one plain
+        string, positionally.** Verified against the hub's own timeline, not by the call
+        returning without raising.
+
+        The dict shape `create_notification({"excerpt": text})` is tried **last**, and that
+        ordering is the whole fix. It used to be tried second, it did **not raise**, it logged
+        "ok", and it put a dict inside the notification's `excerpt` field — so every message
+        this app posted rendered as a blank line in the timeline while the log claimed success.
+        Homey's own managers post `excerpt` as a plain string; comparing our rows against
+        theirs is what exposed it.
+
+        The lesson worth keeping: **a call that does not raise is not a call that worked.** A
+        shape probe needs a check on the observable result, and where there is none, the shape
+        has to be confirmed against the surface the user actually sees.
+
+        `excerpt=` is still attempted first: it is harmless (a wrong keyword raises `TypeError`
+        before anything is posted) and it would be the more explicit API if a future runtime
+        offers it.
 
         Never fatal: a registration that succeeded must not be reported as failed because the
         notification could not be posted.
@@ -773,10 +807,16 @@ class VisitCarDevice_(device.Device):
             fn = getattr(manager, name, None)
             if fn is None:
                 continue
+            # ORDER IS THE FIX. The plain string must be tried before the dict, because this
+            # runtime accepts a positional argument of *any* type and stores it in `excerpt`
+            # verbatim — so the dict shape "succeeds" and writes a dict into the field. The
+            # dict stays last rather than being deleted: on a runtime that genuinely wants
+            # `{"excerpt": …}` the positional call raises TypeError first, and dropping it
+            # would silently lose every message there instead of only rendering it blank.
             for shape, call in (
                 ("excerpt=", lambda f=fn: f(excerpt=text)),
-                ("{'excerpt': …}", lambda f=fn: f({"excerpt": text})),
                 ("positional", lambda f=fn: f(text)),
+                ("{'excerpt': …}", lambda f=fn: f({"excerpt": text})),
             ):
                 try:
                     await compat.resolve(call())
