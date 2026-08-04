@@ -3,7 +3,7 @@
 **An app for someone living in a building that uses iParking, to register parking for
 visitors coming to their own home.** It brings the **방문 차량 관리** (visitor vehicle
 management) feature of the iParking MEMBERS website into Homey: sign in, enter a plate number
-and a visit date to register a visitor, see how many vehicles are registered for today, and
+and a visit date to register a visitor, see how many vehicles are expected to visit today, and
 view or cancel past registrations.
 
 This is an **unofficial, community-built app and is not affiliated with iParking**. It was
@@ -84,6 +84,13 @@ The Homey app itself is © 2026 Geunwon Mo.
   plate and an optional visit date; `register_visitor_today` ("Register a visitor (today)")
   takes only a plate and always registers for today in KST. Both cards go through the same
   register path and differ only in where the date comes from.
+  <br>The date-picking card **echoes the date it actually used back in the success
+  notification** (`12가4567 · 2026-08-05 (Wed) 방문 등록`). Whether Homey hands a `date`
+  argument over as `dd-mm-yyyy` or `mm-dd-yyyy` is not pinned anywhere, and the two are
+  **shape-identical**, so a misread would register the wrong day *silently*. Where the values
+  decide it (`25-12-2026`, whose first field exceeds 12) the app resolves it correctly on its
+  own; where they cannot, one glance at the notification's date exposes it. Worth checking the
+  first time you use the date-picking card.
 - **Frequent-vehicle buttons (up to ten)** — the device settings hold twenty text fields:
   **frequent vehicle name 1–10** and **plate number 1–10**. Every slot where **both** halves are
   filled in and the plate validates gets its own button on the device tile — `[엄마차 방문 등록]`
@@ -106,16 +113,24 @@ The Homey app itself is © 2026 Geunwon Mo.
 
 ## Support
 
+"Supported" and "verified on hardware" are listed separately on purpose. This app was written
+by observing an undocumented API, so having implemented something and having watched it work at
+a real building are two different claims.
+
 | Item | Status |
 | --- | --- |
-| Sign-in · "expected today" count sensor (with Insights) | Supported |
-| Visitor registration (settings page · Flow action) | Supported |
-| Frequent-vehicle buttons (20 device settings → up to 10 push buttons) | Supported |
-| Registration history · cancel | Supported |
-| Multi-building / multi-lot accounts | Supported (only 1 building × 1 lot verified live) |
+| Sign-in · "expected today" count sensor (with Insights) | **Verified on hardware** |
+| Visitor registration (settings page) | **Verified on hardware** |
+| Registration history · cancel (two-press) | **Verified on hardware** |
+| Frequent-vehicle buttons (20 device settings → up to 10 push buttons) | **Verified on hardware** |
+| Visitor registration (2 Flow actions) | Supported — see the note above on the date argument |
+| Multi-building / multi-lot accounts | Supported — the code handles N buildings × M lots, but the real account is 1 × 1, so only that case is verified |
 | Editing a registration (`PUT /invitations`) | Not supported — the endpoint is known but was never exercised |
 | Notifying a visitor by SMS | Not supported — as above |
 | Dashboard widget | Planned only |
+
+Verified against: a Homey Pro (firmware 13.x), Python runtime 3.14, one iParking MEMBERS account
+(one building, one lot).
 
 ## Setup
 
