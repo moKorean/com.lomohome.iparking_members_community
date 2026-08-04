@@ -163,7 +163,10 @@ No body. Verified:
  "resultData":[{"park_seq":9001,"lot_id":"1160009001",
                 "park_name":"예시동 샘플아파트[출입통제A]","park_group_id":null}]}
 ```
-→ this `park_name` is the 주차장명 the user wants as a sensor.
+→ this `park_name` is the 주차장명. It is used at **pairing time** to name the device and is
+stored in the device store; it was a sensor capability up to v0.1.3 and is no longer one — the
+value never changes and it duplicated the device's own name. The device's sensor is now
+오늘 등록된 차량 수, read from `POST /invitations/list` (§4) with a one-day window.
 
 ### 3. 방문차량 등록 — `POST {origin}/invitations`  *(NOT yet exercised — write op)*
 ```json

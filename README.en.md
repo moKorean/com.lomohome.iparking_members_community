@@ -2,9 +2,9 @@
 
 **An app for someone living in a building that uses iParking, to register parking for
 visitors coming to their own home.** It brings the **방문 차량 관리** (visitor vehicle
-management) feature of the iParking MEMBERS website into Homey: sign in, see the parking
-lot's name, enter a plate number and a visit date to register a visitor, and view or cancel
-past registrations.
+management) feature of the iParking MEMBERS website into Homey: sign in, enter a plate number
+and a visit date to register a visitor, see how many vehicles are registered for today, and
+view or cancel past registrations.
 
 This is an **unofficial, community-built app and is not affiliated with iParking**. It was
 built by reverse-engineering the site's undocumented web bundles — see
@@ -68,8 +68,17 @@ The Homey app itself is © 2026 Geunwon Mo.
 
 - **Account sign-in** — sign in with your iParking MEMBERS ID/password from the app
   settings.
-- **Parking lot name sensor** — the lot name tied to your account, as a device
-  capability.
+- **"Registered today" sensor** — how many vehicles are **registered for today** at this
+  lot, as a device capability (`Registered today · 2 cars`). Cancelled registrations are not
+  counted: iParking's 취소 flips a row's status to `CANCEL` rather than removing it, so
+  counting them shows 6 on a day whose honest answer is 1. It refreshes hourly (± 10 %) in a
+  single request, and this app's own register, cancel or history read updates it immediately at
+  **no extra request**. It rolls over to the new day at midnight KST. Insights is enabled, so
+  you can graph how often you have visitors.
+  <br>The **parking-lot-name sensor shipped up to v0.1.3 is gone**: its value was the same
+  string Homey already shows as the device's name, so the tile printed it twice, and an hourly
+  request went to re-confirm a value that never changes. No re-pairing is needed — updating the
+  app removes it.
 - **Register a visitor** — the app settings page (the app's primary UI) lets you pick a
   lot, enter a plate number and a visit date, and register. Whitespace in the plate is
   stripped automatically and the cleaned-up value is echoed back once you leave the field
@@ -80,21 +89,17 @@ The Homey app itself is © 2026 Geunwon Mo.
   plate and an optional visit date; `register_visitor_today` ("Register a visitor (today)")
   takes only a plate and always registers for today in KST. Both cards go through the same
   register path and differ only in where the date comes from.
-- **Frequent-vehicle buttons** — the device settings hold ten text fields: **frequent vehicle
-  name 1–5** and **plate number 1–5**. Every slot where **both** halves are filled in and the
-  plate validates gets its own button on the device tile — `[엄마차 방문 등록]` — and pressing it
-  registers that vehicle for **today in KST**. It runs the **same register path** as the Flow
-  cards, so the no-retry write, the "already registered" outcome and the uncertain-outcome
-  guidance all behave identically. Saving normalizes the plate in place so you see what was
-  stored (`12가 3456` → `12가3456`). A half-filled slot or an invalid plate produces no button,
-  and the log says which slot and why.
+- **Frequent-vehicle buttons (up to ten)** — the device settings hold twenty text fields:
+  **frequent vehicle name 1–10** and **plate number 1–10**. Every slot where **both** halves are
+  filled in and the plate validates gets its own button on the device tile — `[엄마차 방문 등록]`
+  — and pressing it registers that vehicle for **today in KST**. They are **momentary push
+  buttons**: a press does not leave the control switched on, so you can press one as often as
+  you like. Each runs the **same register path** as the Flow cards, so the no-retry write, the
+  "already registered" outcome and the uncertain-outcome guidance all behave identically. Saving
+  normalizes the plate in place so you see what was stored (`12가 3456` → `12가3456`). A
+  half-filled slot or an invalid plate produces no button, and the log says which slot and why.
 - **Registration history** — view and cancel past registrations from the app settings page,
   **newest visit first**.
-- **Frequent-visitor buttons** — save up to five frequent visitors in the device's advanced
-  settings as a name and plate pair. Every pair that is complete and whose plate validates
-  appears on the device as a button carrying that name (e.g. `엄마차 방문 등록`); pressing it
-  registers for **today in KST**. Whitespace in a plate is normalized and written back into
-  the setting on save, so the cleaned-up value is visible rather than silent.
 - **Already-registered guidance** — re-registering the same plate is reported as a
   distinct "already registered" outcome, not a generic error.
 - **Uncertain-outcome guidance** — if a registration attempt times out and its outcome
@@ -106,9 +111,9 @@ The Homey app itself is © 2026 Geunwon Mo.
 
 | Item | Status |
 | --- | --- |
-| Sign-in · parking lot name sensor | Supported |
+| Sign-in · "registered today" count sensor (with Insights) | Supported |
 | Visitor registration (settings page · Flow action) | Supported |
-| Frequent-vehicle buttons (10 device settings → tile buttons) | Supported |
+| Frequent-vehicle buttons (20 device settings → up to 10 push buttons) | Supported |
 | Registration history · cancel | Supported |
 | Multi-building / multi-lot accounts | Supported (only 1 building × 1 lot verified live) |
 | Dashboard widget | Planned for v0.1.1 |

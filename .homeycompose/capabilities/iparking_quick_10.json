@@ -1,0 +1,13 @@
+{
+  "$comment": "자주 오는 차량 10 — the tile button. `uiComponent: \"button\"` on a boolean is the one interactive control Homey allows on a tile, and ten of these are declared up front because Homey has NO dynamic-capability declaration; each device adds and removes them at runtime, so a lot with two favourites shows exactly two buttons. Shaped exactly like Homey's own `button` capability (homey-lib/assets/capability/capabilities/button.json): `getable: false`, `setable: true`, `uiComponent: \"button\"`, `uiQuickAction: true`. **`getable: false` is what makes this a momentary push button**: with no readable value there is no state for Homey to render, so the tile draws a press instead of a switch. v0.1.3 set `getable: true` and justified it as \"the press has to be un-latched\" — that reasoning was inverted, and the maintainer's hub showed it: the readable value *was* the latch, the tile sat lit like a switch someone had flipped on, and the un-latching write existed only to undo a problem it had itself created. Nothing writes to these capabilities now; a press is delivered to the capability listener and that is all. The label a user actually sees is NOT this title: it is overwritten per device with set_capability_options(\"iparking_quick_10\", {\"title\": …}) as a **plain string** (verified on hardware 2026-08-04), so the tile reads [엄마차 방문 등록]. This title is the fallback for the moment before that call lands. NO `insights`: a momentary button is not a measurement. See iparking_lib/const.py's MAX_FAVORITES / quick_capability().",
+  "type": "boolean",
+  "title": {
+    "ko": "자주 오는 차량 10 방문 등록",
+    "en": "Register frequent vehicle 10"
+  },
+  "getable": false,
+  "setable": true,
+  "uiComponent": "button",
+  "uiQuickAction": true,
+  "icon": "/assets/capabilities/visitcar.svg"
+}

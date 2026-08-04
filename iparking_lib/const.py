@@ -184,11 +184,20 @@ ACTIVE_STATUSES = frozenset({STATUS_RESERVE, STATUS_IN, STATUS_OUT})
 # 24 requests/day/device + ~1 login/week. This is politeness enforced by arithmetic rather
 # than asserted, and it is the number the counterparty risk in the plan is priced against:
 # the vendor can rate-limit or block this client regardless of how it is distributed.
+#
+# **What is polled decides whether polling is justified at all**, and this app has now been on
+# both sides of that. v0.1.3 polled to refresh 주차장명 — the lot's name, which is *also* the
+# device's own name, and is fixed for the lifetime of a pairing. 24 requests a day to
+# re-confirm a constant is waste, so both the sensor and the loop were deleted. v0.1.4 polls
+# `CAPABILITY_TODAY_COUNT` instead, which changes whenever anybody registers a car — including
+# on the vendor's own website, where this app cannot see it happen. That is the distinction to
+# keep: polling a constant was waste, polling a count is what makes it true.
 
-#: One hour. There is **no `poll_interval` device setting** in v0.1.0 — deliberately. The
-#: only capability is 주차장명, which changes when a building office renames a lot, i.e.
-#: approximately never; a knob here would invite exactly the tightening this cadence exists
-#: to avoid, in exchange for refreshing a near-constant string sooner.
+#: One hour. There is still **no `poll_interval` device setting** — deliberately. A knob here
+#: would invite exactly the tightening this cadence exists to avoid, and it would buy very
+#: little: the count is already updated the instant this app's own register, cancel or history
+#: fetch answers, so the poll only has to catch registrations made elsewhere and the KST
+#: midnight rollover.
 POLL_INTERVAL_S = 3600.0
 
 #: ± fraction applied to every poll sleep, so N paired lots do not tick in lockstep.
@@ -206,8 +215,8 @@ POLL_BACKOFF_S = (5, 15, 30, 60, 120, 300)
 #: Consecutive failed polls before the device goes unavailable. **Two, not one.** One is a
 #: single dropped request on a cloud API reached over plain HTTP, which is ordinary; two is a
 #: pattern. And the failure this guards against is not a loud one — the capability keeps the
-#: last name it read, so without the transition a lot that stopped answering would sit on
-#: screen looking exactly like a healthy one.
+#: last count it read, so without the transition a lot that stopped answering would sit on
+#: screen looking exactly like a lot with no visitors today.
 MAX_POLL_FAILURES = 2
 
 # --- Flow cards -------------------------------------------------------------
@@ -240,10 +249,14 @@ SETTING_LANGUAGE = "language"
 # Everything a paired device needs *except* its identity. `data.id` holds `lot_id` and is
 # **immutable after pairing**, so getting that wrong forces every user to re-pair; the store
 # is mutable, which is why `stor_seq`, `park_seq` and `park_name` live here even though the
-# first two never actually change. v0.1.0 writes none of them at runtime (criterion 18).
+# first two never actually change. Nothing writes any of them at runtime (criterion 18).
 
 STORE_STOR_SEQ = "stor_seq"
 STORE_PARK_SEQ = "park_seq"
+
+#: Written by the driver at pairing, and **read by nobody at runtime** since the 주차장명
+#: sensor was removed. Kept because it is the value the pair view names the device with, and a
+#: store key that already exists on every paired device costs nothing to leave in place.
 STORE_PARK_NAME = "park_name"
 
 #: The same value as `data.id`, kept in the store as well so the device layer can read its
@@ -251,37 +264,62 @@ STORE_PARK_NAME = "park_name"
 #: both the driver and the device already agree on.
 STORE_LOT_ID = "lot_id"
 
-#: 주차장명 as a read-only string sensor (requirement 4).
+#: The 주차장명 sensor v0.1.3 shipped. **Removed, and this id survives only so that already
+#: paired devices can shed it** — `device._shed_park_name` calls `remove_capability` with it at
+#: `on_init`, which is what spares every user a re-pair. There is no
+#: `.homeycompose/capabilities/iparking_park_name.json` any more, so nothing can add it back.
 #:
-#: **It carries no `insights`, and that is not an oversight.** Homey's schema does permit
-#: `insights` on a `string` capability, so a future maintainer scanning
-#: `.homeycompose/capabilities/iparking_park_name.json` may read its absence as a missing
-#: field. It is not: this value is the name of a parking lot. It changes when a building
-#: office renames the lot, i.e. approximately never, and a log of a near-constant string is
-#: not a measurement of anything. Adding it would produce an empty graph on the device page
-#: and nothing else.
+#: Why it went: its value was the lot's name, which is *also* the name Homey shows for the
+#: device, so the tile printed the same string twice; it is constant for the lifetime of a
+#: pairing; and the hourly poll existed only to refresh it. `CAPABILITY_TODAY_COUNT` replaced
+#: it — same tile, same poll, a value that actually changes. Delete this constant once no hub in
+#: the field can still be carrying the capability.
 CAPABILITY_PARK_NAME = "iparking_park_name"
+
+#: **오늘 등록된 차량 수** — the number of vehicles registered for today at this lot, and the one
+#: capability every paired device carries. `.homeycompose/capabilities/iparking_today_count.json`.
+#:
+#: It replaced 주차장명 because it is the value a resident actually wants from a glance at a
+#: tile, and because it earns the poll that the constant string did not.
+#:
+#: **It carries `insights: true`, and that is the opposite decision from the one 주차장명 got —
+#: for the same reason.** A near-constant string logged over time produces an empty graph;
+#: a count of registrations per day is a real measurement, and the graph answers a real question
+#: (how often does this household have visitors?).
+#:
+#: **`CANCEL` rows are not counted.** See `ACTIVE_STATUSES`: 취소 does not delete a row, it flips
+#: `inot_status`, so a day's rows are frequently mostly cancellations — on the maintainer's own
+#: account, counting them showed 6 where the honest answer was 1. The count is the same
+#: existential predicate over `ACTIVE_STATUSES` that the register path's recovery re-query uses,
+#: and it is deliberately the *same set object* rather than a second spelling of it.
+CAPABILITY_TODAY_COUNT = "iparking_today_count"
 
 # --- 자주 오는 차량: the device's own tile buttons ----------------------------
 #
-# Ten device settings (5 names + 5 plates) and five capabilities, and the asymmetry between
+# Twenty device settings (10 names + 10 plates) and ten capabilities, and the asymmetry between
 # those two numbers is the whole mechanism. Homey allows exactly one interactive control on a
 # tile — a `boolean` capability with `uiComponent: "button"` — and it has **no
 # dynamic-capability declaration**: a capability that is not in `app.json` cannot be added to
-# a device at all. So five schemas are declared up front and each device adds or removes them
+# a device at all. So ten schemas are declared up front and each device adds or removes them
 # at runtime (`add_capability` / `remove_capability`), which is what lets a lot with two
-# favourites show exactly two buttons instead of five, three of them dead.
+# favourites show exactly two buttons instead of ten, eight of them dead.
 #
 # The button's **label** is not its schema title. It is overwritten per device with
-# `set_capability_options(..., {"title": …})`, because `엄마차` is user input and no static
-# manifest can carry it. That call is the one part of this feature that cannot be verified
-# off-device; see `device._sdk_call`.
+# `set_capability_options(..., {"title": …})` as a plain string (verified on hardware), because
+# `엄마차` is user input and no static manifest can carry it.
+#
+# The schemas are `getable: false`, exactly like Homey's own `button`. That is what makes the
+# tile draw a momentary push button rather than a latching switch, and it means **nothing in
+# this app ever writes a value to one of them**: a press arrives at the capability listener and
+# there is no state left behind to reset.
 
-#: How many favourite slots a device has. Five is a manifest fact before it is a preference:
-#: raising it means five more capability JSON files and ten more settings fields, so it is
+#: How many favourite slots a device has. Ten is a manifest fact before it is a preference:
+#: raising it means more capability JSON files and two more settings fields per slot, so it is
 #: **not** a tunable — `MAX_FAVORITES` and `.homeycompose/capabilities/iparking_quick_*.json`
-#: have to be changed together or a device asks for a capability the app never declared.
-MAX_FAVORITES = 5
+#: have to be changed together or a device asks for a capability the app never declared, which
+#: fails only on a hub. `tests/test_visitcar.py` compares this number against the files on disk
+#: in both directions so a disagreement fails off-device instead.
+MAX_FAVORITES = 10
 
 
 def favorite_name_setting(index: int) -> str:
@@ -297,7 +335,7 @@ def favorite_plate_setting(index: int) -> str:
 def quick_capability(index: int) -> str:
     """The tile-button capability id for favourite slot `index` (1-based).
 
-    Spelled here rather than inline anywhere so the device, the tests and the five JSON
+    Spelled here rather than inline anywhere so the device, the tests and the ten JSON
     schemas cannot drift: a typo produces a capability the app never declared, which the SDK
     refuses at `add_capability` time — i.e. only on a hub.
     """

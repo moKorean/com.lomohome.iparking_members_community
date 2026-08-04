@@ -198,6 +198,41 @@ def flow_card(homey, kind: str, card_id: str):
     raise AttributeError(f"Homey flow has no {kind}-card getter")
 
 
+def devices(homey, driver_id: str) -> list:
+    """Every paired device of one driver, or `[]` on any runtime that will not say.
+
+    Used for exactly one thing: letting a settings-page history fetch update the 오늘 등록 count
+    on the matching device tile, at **no extra request** (see `device.note_history`). That makes
+    it a courtesy, so every step is optional and nothing raises — a runtime that exposes no
+    driver registry costs the user a tile that is up to an hour stale, and nothing else. Returning
+    `[]` and letting the caller do nothing is the correct failure here.
+
+    Both spellings of both accessors, on the same reasoning as `flow_card`. `get_driver` /
+    `get_devices` are the shapes the Python SDK actually ships.
+    """
+    manager = getattr(homey, "drivers", None)
+    if manager is None:
+        return []
+    for getter in ("get_driver", "getDriver"):
+        fn = getattr(manager, getter, None)
+        if fn is None:
+            continue
+        try:
+            driver = fn(driver_id)
+        except Exception:
+            return []
+        for lister in ("get_devices", "getDevices"):
+            listing = getattr(driver, lister, None)
+            if listing is None:
+                continue
+            try:
+                return list(listing())
+            except Exception:
+                return []
+        return []
+    return []
+
+
 def register_run_listener(card, fn) -> None:
     for name in ("register_run_listener", "registerRunListener"):
         reg = getattr(card, name, None)

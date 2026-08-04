@@ -512,11 +512,40 @@ class FakeNotifications(_Strict):
         return _maybe_async(None, self._awaitable)
 
 
+class FakeDriver(_Strict):
+    """`homey.drivers.get_driver(...)` — only `get_devices`, which is all `compat.devices` asks
+    for. Both spellings, because that accessor tries both."""
+
+    def __init__(self, devices=()):
+        self._devices = list(devices)
+        self.get_devices = self._get_devices
+        self.getDevices = self._get_devices  # noqa: N815 — the camelCase fallback
+
+    def _get_devices(self):
+        return tuple(self._devices)
+
+
+class FakeDrivers(_Strict):
+    """`homey.drivers`. Left absent from `FakeHomey` unless a test asks for it, because
+    `compat.devices` degrades to `[]` on a runtime without it and that branch is only reachable
+    when the attribute genuinely does not exist.
+
+    An unknown driver id raises, exactly as `ManagerDrivers.get_driver` does — the fallback that
+    matters is the one where nothing at all answers, not one where a lookup quietly returns None.
+    """
+
+    def __init__(self, **drivers):
+        self._drivers = {key: FakeDriver(value) for key, value in drivers.items()}
+
+    def get_driver(self, driver_id: str) -> FakeDriver:
+        return self._drivers[driver_id]
+
+
 class FakeHomey(_Strict):
     """The `self.homey` every handler, device and driver is handed."""
 
     def __init__(self, *, settings=None, i18n=None, app=None, flow=None, language=None,
-                 notifications=None):
+                 notifications=None, drivers=None):
         self.settings = settings if settings is not None else FakeSettings()
         self.i18n = i18n if i18n is not None else FakeI18n()
         self.app = app if app is not None else FakeApp()
@@ -526,6 +555,10 @@ class FakeHomey(_Strict):
         # when the attribute genuinely does not exist.
         if notifications is not None:
             self.notifications = notifications
+        # Same rule: `compat.devices` returns `[]` when this manager is missing, so it is left
+        # absent unless a test needs the 오늘 등록 count to be updated from a history read.
+        if drivers is not None:
+            self.drivers = drivers
         # compat.language's last resort. Left unset unless a test asks for it, so the
         # accessor chain above is what actually gets exercised.
         if language is not None:
@@ -561,6 +594,11 @@ class Device(_Strict):
         self.capability_options = {}
         self.setting_writes = []
         self.listeners = {}
+        # The real SDK's `_on_settings_pending`, and it is not decoration: `Device.set_settings`
+        # opens with `if self._on_settings_pending: raise HomeyError(...)`, so a settings write
+        # made from inside `on_settings` cannot succeed. Modelling the refusal is what turns
+        # "the normalized plate never appeared on the hub" into a test.
+        self.on_settings_pending = False
         self._sdk_awaitable = sdk_awaitable
         self._add_capability_error = add_capability_error
         if sdk_spelling in ("snake", "both"):
@@ -587,6 +625,11 @@ class Device(_Strict):
         return _maybe_async(dict(self.settings), self._sdk_awaitable)
 
     def _set_settings(self, values):
+        if self.on_settings_pending:
+            # Verbatim from the SDK: `homey/device.py`'s `set_settings` raises this rather than
+            # queueing the write, and `_on_settings` clears the flag only after `on_settings`
+            # has returned. This is why the write-back has to be scheduled.
+            raise RuntimeError("Cannot set settings while on_settings is still pending")
         # The real SDK merges a partial dict rather than replacing the whole set.
         self.settings.update(values)
         self.setting_writes.append(dict(values))
@@ -713,7 +756,7 @@ def make_homey():
     def _make(*, api=None, settings=None, awaitable=False, language="ko",
               i18n_spelling="snake", flow_spelling="snake", expose_shared_api=True,
               expose_reauth=True, expose_logout=True, shared_api_error=None,
-              reauth_error=None, homey_language=None, notifications=None):
+              reauth_error=None, homey_language=None, notifications=None, drivers=None):
         return FakeHomey(
             settings=FakeSettings(settings, awaitable=awaitable),
             i18n=FakeI18n(language, spelling=i18n_spelling, awaitable=awaitable),
@@ -723,6 +766,7 @@ def make_homey():
             flow=FakeFlow(spelling=flow_spelling),
             language=homey_language,
             notifications=notifications,
+            drivers=drivers,
         )
 
     return _make

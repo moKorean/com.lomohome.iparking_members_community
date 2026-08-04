@@ -1,21 +1,44 @@
-"""One paired parking lot: the 주차장명 sensor, and the Flow action's write path.
+"""One paired parking lot: the 오늘 등록 sensor, its 자주 오는 차량 tile buttons, and the
+register write path.
 
-Two jobs, and they are deliberately asymmetric in weight.
+**The sensor is 오늘 등록된 차량 수 — how many vehicles are registered for today at this lot**
+(`iparking_today_count`). It replaced 주차장명 in v0.1.4, and the swap is the whole argument for
+the poll that refreshes it. 주차장명 was the lot's name: *also* the name Homey shows for the
+device, so the tile printed the same string twice, and constant for the lifetime of a pairing —
+24 requests a day to re-confirm it was waste, so it and its loop were deleted. This count changes
+whenever anybody registers a car, including on the vendor's own website where this app cannot see
+it happen. Polling a constant was waste; polling a count is what makes it true.
 
-**The sensor (requirement 4).** One capability, `iparking_park_name`, holding 주차장명. The
-value is set from the device store at `on_init` — so a device shows its lot name immediately,
-before any request and even with the account logged out — and then refreshed once an hour
-from the server, because a building office can rename a lot. Shape mirrors
-`navien_lib/airmonitor/device.py`, the closest analogue in the sibling app: read-only over
-REST, restart-on-death with backoff, `set_unavailable` after two consecutive failures, and
-`_set()` guarded by `get_capabilities()`.
+**`CANCEL` rows are not counted.** 취소 flips `inot_status` and leaves the row in the list, so a
+day's rows are frequently mostly cancellations — counting them showed 6 on the maintainer's own
+account where the honest answer was 1. The rule lives once, in `client.count_registered_on`, over
+the same `ACTIVE_STATUSES` set the register path's recovery re-query uses.
 
-**The Flow actions (item 7).** `flow_register` is the whole run listener body, shared by both
-register cards — `register_visitor` (plate + optional date) and `register_visitor_today`
-(plate only), which differ only in where `visit_date` comes from. It writes to a
+**Three things keep the number honest**, and each is a defect avoided rather than a nicety:
+
+1. **The date window is recomputed on every tick** from `dates.today_api()`, never cached at
+   `on_init`. A cached window would survive KST midnight and leave yesterday's count on the tile
+   until the app restarted — the tile would be wrong for a whole day and would look fine.
+2. **This app's own actions update it immediately**, at **zero extra requests**: a register from
+   a Flow card or a tile press refreshes it, and every settings-page history fetch feeds its rows
+   straight into the count (`note_history`), which is what covers the settings page's register
+   and cancel — the page re-reads the table after both. The poll is therefore only there to catch
+   registrations made elsewhere and the midnight rollover.
+3. **A one-day window** (`startDate == endDate == today`) keeps the response small, and the date
+   is asserted client-side anyway — see `count_registered_on`.
+
+**Poll cadence** is 3600 s ± 10 % with a 0–10 % start offset and **one request per tick** —
+24 requests/day/device. See `const.POLL_INTERVAL_S`; there is still no `poll_interval` setting.
+Two consecutive failures mark the device unavailable, because the capability keeps the last count
+it read: without the transition, a lot that stopped answering looks exactly like a lot with no
+visitors today.
+
+**The register path (item 7).** `flow_register` is the whole run listener body, shared by both
+register cards — `register_visitor` (plate + optional date) and `register_visitor_today` (plate
+only), which differ only in where `visit_date` comes from — and by a tile press. It writes to a
 real building's access-control system, so it delegates every consequential decision to
-`client.register()` — zero retries, the hourly ceiling, the fresh-budget recovery re-query,
-the status-filtered existence predicate — and adds exactly two things of its own:
+`client.register()` — zero retries, the hourly ceiling, the fresh-budget recovery re-query, the
+status-filtered existence predicate — and adds exactly two things of its own:
 
 1. **The success notification always echoes the date that was actually used**, rendered by
    `dates.format_kst_human`. This is not decoration. A Homey Flow `date` argument in
@@ -33,35 +56,39 @@ duplicate as a failed action would fire its own error branch over nothing.
 never invites a retry, because a retry is what turns one uncertain write into two real
 registrations at a building.
 
-**Poll cadence** is 3600 s ± 10 % with a 0–10 % start offset and **one request per tick** —
-24 requests/day/device. See `const.POLL_INTERVAL_S`; there is no `poll_interval` setting in
-v0.1.0.
-
-**자주 오는 차량 — the tile buttons.** Ten device settings (5 이름 + 5 차량번호) and, for every
-*complete and valid* pair, one button on the tile that registers that plate for **today in
+**자주 오는 차량 — the tile buttons.** Twenty device settings (10 이름 + 10 차량번호) and, for
+every *complete and valid* pair, one button on the tile that registers that plate for **today in
 KST**. Three mechanics carry the whole feature, and each is a constraint rather than a choice:
 
 1. A tile button is a `boolean` capability with `uiComponent: "button"`, and Homey has **no
-   dynamic-capability declaration** — so five are declared in `app.json` up front and each
+   dynamic-capability declaration** — so ten are declared in `app.json` up front and each
    device adds or removes them itself (`add_capability` / `remove_capability`), which is what
-   makes a lot with two favourites show exactly two buttons rather than five.
+   makes a lot with two favourites show exactly two buttons rather than ten.
 2. The label comes from `set_capability_options(..., {"title": …})` at runtime, because
    `엄마차` is typed after install and no static manifest can carry it.
-3. A `button` reports `true` on press and **stays** true, so `press_favorite` resets it to
-   `false` in a `finally` or the button can be pressed exactly once per app start.
+3. The schemas are **`getable: false`**, exactly like Homey's own `button` capability, and that
+   is what makes the tile draw a momentary push button. v0.1.3 used `getable: true` and then
+   wrote `false` back after every press to "un-latch" it; that was inverted reasoning and the
+   maintainer's hub showed it — the readable value *was* the latch, the tile sat lit like a
+   switch that had been flipped on, and the reset existed only to undo a problem it had itself
+   created. **Nothing in this module writes a capability value at all any more.**
 
 **A pair counts only when both halves are present and the plate validates.** Half a pair or a
 typo'd plate produces no button *and a log line saying which slot and why* — silence there
 would leave a user staring at a button that never appeared with nothing to read.
 
-**The one runtime settings write in this app is here, and it is deliberate.** When a plate
-validates, `on_settings` writes the normalized form back (`12가 3456` → `12가3456`) so the
+**The one runtime settings write in this app is here, and it is deferred on purpose.** When a
+plate validates, the normalized form is written back (`12가 3456` → `12가3456`) so the
 maintainer *sees* what was stored, the same visibility rule the settings page follows on blur.
-That is a **settings** write, not a store write — see the paragraph below, which still holds.
+It cannot be written from inside the settings callback: the SDK refuses that outright
+(`Device.set_settings` raises `Cannot set settings while on_settings is still pending`, and
+`_on_settings` then overwrites its own cached settings with the frozen incoming dict anyway), so
+the write is **scheduled** and lands one turn of the event loop later. See
+`_schedule_normalize`. That is a **settings** write, not a store write — see the paragraph
+below, which still holds.
 
 **No runtime store writes** (criterion 18). Nothing here calls `set_store_value`: `stor_seq`,
-`park_seq` and `lot_id` are fixed at pairing, and `park_name` lives on the capability, which
-is the value the user actually looks at. The pattern for a store write exists in
+`park_seq` and `lot_id` are fixed at pairing. The pattern for a store write exists in
 `com.lomohome.localthings` if a later version needs one. Settings are a different object with
 a different lifetime — they are user input, editable on the device page — so normalizing one
 in place breaks none of that invariant's reasoning.
@@ -76,6 +103,7 @@ from homey import device
 from iparking_lib import compat, i18n
 from iparking_lib.const import (
     CAPABILITY_PARK_NAME,
+    CAPABILITY_TODAY_COUNT,
     MAX_FAVORITES,
     MAX_POLL_FAILURES,
     POLL_BACKOFF_S,
@@ -83,7 +111,6 @@ from iparking_lib.const import (
     POLL_JITTER,
     POLL_START_JITTER,
     STORE_LOT_ID,
-    STORE_PARK_NAME,
     STORE_PARK_SEQ,
     STORE_STOR_SEQ,
     favorite_name_setting,
@@ -91,7 +118,11 @@ from iparking_lib.const import (
     quick_capability,
 )
 from iparking_lib.iparking import codes, dates
-from iparking_lib.iparking.client import IparkingError, RegisterUncertain
+from iparking_lib.iparking.client import (
+    IparkingError,
+    RegisterUncertain,
+    count_registered_on,
+)
 from iparking_lib.iparking.plate import (
     InvalidPlateError,
     mask_plate,
@@ -99,13 +130,9 @@ from iparking_lib.iparking.plate import (
     strip_plate,
 )
 
-#: Shown while the lot cannot be read. Deliberately not "logged out" — the account may be
+#: Shown while today's count cannot be read. Deliberately not "logged out" — the account may be
 #: fine and the vendor's API simply unreachable, and the tile has no room to explain both.
-_UNAVAILABLE = "주차장 정보를 가져올 수 없습니다"
-
-#: Shown when the account no longer lists this lot at all. A different failure with a
-#: different remedy (re-pair, or ask the building office), so it gets its own sentence.
-_GONE = "이 주차장이 계정에서 보이지 않습니다. 관리사무소에 문의하거나 기기를 다시 추가하세요."
+_UNAVAILABLE = "오늘 등록 현황을 가져올 수 없습니다"
 
 #: One usable favourite: its 1-based slot, the label its button carries, and the **normalized**
 #: plate. Never constructed for half a pair or an invalid plate — see `read_favorites`.
@@ -127,9 +154,15 @@ def read_favorites(settings) -> tuple[list[Favorite], list[str]]:
     of them entirely — it is a nickname the user chose, diagnostic output gets pasted into
     issues, and the tile already shows it to the only person who needs it.
 
-    Pure, and takes a plain dict, so the pairing rule is testable without the SDK.
+    Takes any mapping and coerces it with `dict(...)` rather than testing `isinstance(…, dict)`:
+    this runtime's `get_settings()` returns a `MappingProxyType`, which is a perfectly usable
+    mapping and not a `dict` subclass. An `isinstance` guard here silently discarded every
+    favourite on a real hub once — see `_device_settings` for the full story.
     """
-    values = settings if isinstance(settings, dict) else {}
+    try:
+        values = dict(settings)
+    except (TypeError, ValueError):
+        values = {}
     favorites: list[Favorite] = []
     rejected: list[str] = []
     for index in range(1, MAX_FAVORITES + 1):
@@ -160,10 +193,12 @@ def read_favorites(settings) -> tuple[list[Favorite], list[str]]:
 def _new_settings(args, kwargs) -> dict | None:
     """The post-change settings out of whatever shape this runtime calls `on_settings` with.
 
-    Node's SDK3 hands over one event object (`{oldSettings, newSettings, changedKeys}`), SDK2
-    passed `(old, new, changed)` positionally, and every manager this app actually uses is
-    snake_case with plain arguments — and **no Python stub ships with the CLI**, so there is
-    nothing to read that settles which one the Python runtime does. All of them are accepted.
+    The Python SDK calls it with three keywords — `old_settings`, `new_settings`,
+    `changed_keys` — but Node's SDK3 hands over one event object
+    (`{oldSettings, newSettings, changedKeys}`) and SDK2 passed `(old, new, changed)`
+    positionally. All of them are accepted, because this hook is the one place where getting the
+    shape wrong presents as settings that save and never produce a button, with a `TypeError`
+    buried in a hub log nobody is watching.
 
     `None` means "could not tell", which the caller answers by re-reading `get_settings()`.
     That fallback is why the tolerance here can afford to be conservative rather than clever.
@@ -205,7 +240,6 @@ class VisitCarDevice_(device.Device):
         self._stor_seq = _int(store.get(STORE_STOR_SEQ))
         self._park_seq = _int(store.get(STORE_PARK_SEQ))
         self._lot_id = str(store.get(STORE_LOT_ID) or "")
-        self._park_name = str(store.get(STORE_PARK_NAME) or "")
         # The store rather than `get_data()`: both hold `lot_id` (the driver writes it to
         # each), and the store is the one object the driver and the device already share.
         self.log(
@@ -213,22 +247,29 @@ class VisitCarDevice_(device.Device):
             f"park_seq={self._park_seq} stor_seq={self._stor_seq}"
         )
 
-        # Answer the sensor from the store before any request. A lot's name is fixed at
-        # pairing and does not need the network to be true, so a hub that boots offline shows
-        # 주차장명 immediately instead of an empty tile that looks broken.
-        await self._set(CAPABILITY_PARK_NAME, self._park_name)
-
         # Which quick capabilities already carry a press handler. Per device lifetime, because
         # binding a listener twice for one capability is not something the SDK's contract
         # promises to tolerate and `_reconcile_buttons` runs on every settings save.
         self._listening: set[str] = set()
-        # Guards the settings write below against the recursion it could otherwise cause: this
-        # is the one place in the app that writes settings *from inside* a settings callback.
+        # Guards `on_settings` against re-entry by the deferred write below.
         self._settings_busy = False
+        # The scheduled normalized-plate write, so `on_uninit` can cancel it and a second save
+        # can supersede it. See `_schedule_normalize`.
+        self._normalize_task: asyncio.Task | None = None
+        # `None` rather than 0 until something has actually been read: 0 is a real answer — a day
+        # with no visitors — and starting there would log a "changed to 0" that never happened.
+        self._today_count: int | None = None
+
+        # Both guarded, and independently: a runtime that exposes no capability-mutation surface
+        # at all must still reach the end of `on_init` with a working register path, which is
+        # the requirement that survives everything else here.
+        try:
+            await self._shed_park_name()
+        except Exception as exc:
+            self.log(f"iparking: the 주차장명 sensor could not be removed: {exc}")
         # Reconciled at init as well as on every save, so a hub restart does not lose the
         # buttons — a paired device is re-created from scratch and `add_capability` is the only
-        # thing that puts them back. Guarded: a runtime that exposes no capability-mutation
-        # surface at all must still get its 주차장명 sensor and its poll loop.
+        # thing that puts them back.
         try:
             await self._reconcile_buttons()
         except Exception as exc:
@@ -250,13 +291,45 @@ class VisitCarDevice_(device.Device):
         await self._teardown()
 
     async def _teardown(self) -> None:
-        """Cancel the poll task, then **await** it, so nothing is still running once Homey
-        considers the device gone."""
+        """Cancel everything this device has in flight, then **await** it.
+
+        Two things: the poll task, and the deferred normalized-plate write. Both are awaited
+        rather than merely cancelled, so nothing is still running once Homey considers the device
+        gone — a `set_capability_value` or a `set_settings` that lands afterwards is a write
+        against a torn-down object.
+        """
         self._closing = True
+        pending = []
         task = getattr(self, "_poll_task", None)
         if task is not None:
             task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            pending.append(task)
+        write = self._normalize_task
+        self._normalize_task = None
+        if write is not None:
+            write.cancel()
+            pending.append(write)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    async def _shed_park_name(self) -> None:
+        """Remove the 주차장명 sensor from a device paired by an earlier version.
+
+        This is what spares every existing user a re-pair. It is a no-op on a freshly paired
+        device — the capability is not in `driver.compose.json` any more — and on any device
+        that has already been through one `on_init` since the upgrade.
+        """
+        if CAPABILITY_PARK_NAME not in self.get_capabilities():
+            return
+        self.log("iparking: removing the 주차장명 sensor left over from an earlier version")
+        await self._sdk_call(
+            ("remove_capability", "removeCapability"), CAPABILITY_PARK_NAME
+        )
+        # It never had a listener, but the discard keeps one rule for every removal rather than
+        # two: a capability that goes away takes its listener registration with it.
+        self._listening.discard(CAPABILITY_PARK_NAME)
+
+    # --- 오늘 등록: the sensor and its poll -----------------------------------
 
     def _on_poll_task_done(self, task) -> None:
         """Restart the poll loop if it died; stay out of the way if it was torn down.
@@ -313,9 +386,9 @@ class VisitCarDevice_(device.Device):
             raise
         except Exception as exc:
             self.log(f"iparking: initial poll failed: {exc}")
-        # The boot attempt is deliberately outside the two-cycle budget: it is already
-        # excused by the store-seeded capability value, so counting it would make the first
-        # real cycle the second strike.
+        # The boot attempt is deliberately outside the two-cycle budget: a device that has never
+        # answered has no count to be wrong about, so counting it would make the first real cycle
+        # the second strike.
         self._failures = 0
         # One-shot 0–10 % offset on the first loop sleep only, so lots paired together stop
         # ticking in lockstep from boot.
@@ -333,71 +406,99 @@ class VisitCarDevice_(device.Device):
                 self.log(f"iparking: poll failed: {exc}")
 
     async def _poll_once(self) -> None:
-        """**One** request: this store's lot list, read for this lot's current name.
+        """**One** request: today's 등록 내역 for this lot, counted.
 
-        `parking_lots` rather than `enumerate_lots`: a device belongs to exactly one store, so
-        asking for one store's lots is one request per tick regardless of how many stores the
-        account holds.
+        **The window is recomputed here, on every tick, and never cached anywhere.** That is the
+        midnight rollover: at 00:00 KST the answer becomes "today's registrations", for the new
+        today, and a window captured at `on_init` would keep reporting yesterday's number until
+        the app happened to restart — wrong for a whole day, and indistinguishable on the tile
+        from a correct answer.
+
+        A one-day window also keeps the response small; the date is asserted again inside
+        `count_registered_on`, because the vendor's own filtering rules were never characterised
+        and a bare number on a tile cannot reveal that it silently covered three months.
         """
+        today = dates.today_api()
         try:
-            rows = await self._api.parking_lots(self._stor_seq)
+            rows = await self._api.history(
+                park_seq=self._park_seq,
+                stor_seq=self._stor_seq,
+                start_date=today,
+                end_date=today,
+            )
         except Exception:
             self._failures += 1
             await self._update_availability()
             raise
-        name = self._name_from(rows)
-        if name is None:
-            # Not a transport failure, but not a healthy device either: the account can no
-            # longer see this lot. Counted the same way, because the user-visible verdict is
-            # the same one — this tile is not telling you the truth any more.
-            self._failures += 1
-            self.log(f"iparking: lot {self._lot_id or self._park_seq} not in the account's list")
-            await self._update_availability(_GONE)
-            return
         # Reset on an explicit success, never inferred from the absence of an exception.
         self._failures = 0
-        if name != self._park_name:
-            self.log(f"iparking: lot renamed {self._park_name!r} -> {name!r}")
-            self._park_name = name
-        await self._set(CAPABILITY_PARK_NAME, name)
+        await self._apply_count(count_registered_on(rows, today), today)
         await self._update_availability()
 
-    def _name_from(self, rows) -> str | None:
-        """This lot's 주차장명 from a `/parkinglot/list` response, or `None` if it is absent.
+    async def note_history(self, park_seq: int, stor_seq: int, rows) -> None:
+        """Update the count from rows somebody else already fetched. **Costs no request.**
 
-        `lot_id` is preferred because it is what `data.id` was keyed on; `park_seq` is a
-        fallback for a deployment that stops sending `lot_id`, and it is only consulted when
-        the id match failed — matching on the weaker key first could pick a different store's
-        lot that happens to share a `park_seq`, which is the very uncertainty that kept
-        `park_seq` out of `data.id`.
+        Called by the settings page's `GET /history` handler, which is what keeps the tile
+        correct the instant a user registers or cancels there: `form.js` re-reads the table after
+        both actions, so this one hook covers both without a second round trip.
+
+        Silently ignores a fetch for a different lot, and a window that does not include today —
+        the settings table's default window is three months, and this must not turn a wide fetch
+        into a count of it. `count_registered_on` does that filtering; the guard here is only
+        about *which device* the rows belong to.
+
+        Never raises: it is a courtesy update hanging off somebody else's request, and a failure
+        here must not turn a successful history fetch into an error on the page.
         """
-        for key in ("lot", "seq"):
-            for row in rows if isinstance(rows, list) else ():
-                if not isinstance(row, dict):
-                    continue
-                lot_id = str(row.get("lot_id") or row.get("lotId") or "")
-                park_seq = _int(row.get("park_seq") or row.get("parkSeq"))
-                hit = (lot_id and lot_id == self._lot_id) if key == "lot" else (
-                    park_seq and park_seq == self._park_seq
-                )
-                if hit:
-                    return str(row.get("park_name") or row.get("parkName") or "") or None
-        return None
+        if int(park_seq) != self._park_seq or int(stor_seq) != self._stor_seq:
+            return
+        try:
+            today = dates.today_api()
+            await self._apply_count(count_registered_on(rows, today), today)
+        except Exception as exc:
+            self.log(f"iparking: 오늘 등록 count could not be updated from a history read: {exc}")
+
+    async def refresh_today_count(self) -> None:
+        """Re-read today's count, now. One request, and never fatal.
+
+        Called after this app's own register so the tile is right the moment the user acts, rather
+        than up to an hour later. The alternative — incrementing the number we already had —
+        was rejected: it would put a value on the tile that no server ever confirmed, and this
+        capability's whole job is to report what the vendor says is registered.
+        """
+        try:
+            if self._api is None:
+                # The register path holds its own session handle, so a press can land before the
+                # poll loop has stored one — most likely on the very first press after a restart.
+                # Taking the shared session here rather than giving up keeps that press's tile
+                # update working instead of leaving it silently to the next tick.
+                self._api = await compat.shared_api(self.homey)
+            await self._poll_once()
+        except Exception as exc:
+            self.log(f"iparking: 오늘 등록 count refresh failed: {exc}")
+
+    async def _apply_count(self, count: int, today: str) -> None:
+        value = int(count)
+        if value != self._today_count:
+            self.log(f"iparking: 오늘({today}) 등록된 차량 {value}대")
+            self._today_count = value
+        await self._set(CAPABILITY_TODAY_COUNT, value)
 
     async def _update_availability(self, reason: str = _UNAVAILABLE) -> None:
         """`set_unavailable` after **two** consecutive failures, `set_available` on recovery.
 
         Two rather than one: a single dropped request against a cloud API addressed over plain
         HTTP is ordinary, two in a row is a pattern. And unavailability has to be *said* here
-        rather than inferred from the tile, because `_poll_once` keeps the last name it read —
-        so a lot that stopped answering would otherwise look exactly like a healthy one.
+        rather than inferred from the tile, because `_poll_once` keeps the last count it read —
+        so a lot that stopped answering would otherwise look exactly like a lot with no visitors
+        today, which is the most ordinary reading of all.
         """
         if self._failures >= MAX_POLL_FAILURES:
             await self._safe_unavailable(reason)
         else:
             await self._safe_available()
 
-    # --- the Flow action ----------------------------------------------------
+    # --- the register path --------------------------------------------------
 
     async def flow_register(
         self, car_number: str, visit_date: str = "", *, label: str = ""
@@ -505,6 +606,13 @@ class VisitCarDevice_(device.Device):
         self.log(
             f"iparking: {source} register {mask_plate(plate)} -> {outcome} on {result.api_date}"
         )
+        # The tile should be right the moment the user acts, not up to an hour later. **Only when
+        # the registration was for today**, because a Flow card registering next Tuesday changes
+        # no count and must not spend a request discovering that. Never fatal, and deliberately
+        # after the notification: a refresh that fails must not turn a registration that
+        # succeeded into an error.
+        if str(result.api_date) == dates.today_api():
+            await self.refresh_today_count()
         return True
 
     # --- 자주 오는 차량: the tile buttons -------------------------------------
@@ -513,20 +621,19 @@ class VisitCarDevice_(device.Device):
         """The favourites were edited: normalize the plates, then reconcile the buttons.
 
         `*args, **kwargs` rather than a declared signature, and that is the point rather than
-        laziness: the SDK's Python call shape for this hook is not readable anywhere (see
-        `_new_settings`), and a mismatched signature here would present as settings that save
-        but never produce a button — with a `TypeError` buried in a hub log nobody is watching.
+        laziness: three call shapes are plausible (see `_new_settings`) and a mismatched
+        signature here would present as settings that save but never produce a button.
 
-        Order matters. The write-back happens **first**, and the reconcile then runs against
-        the normalized dict, so a plate typed as `12가 3456` produces a button on the same save
-        rather than the next one.
+        Normalization happens **in memory first**, so the reconcile below runs against the
+        normalized dict and a plate typed as `12가 3456` produces a button on the same save
+        rather than the next one. The visible write-back is *scheduled*, because the SDK refuses
+        a `set_settings` made while this hook is still pending — see `_schedule_normalize`.
         """
         if self._settings_busy:
-            # Reached only if a runtime re-enters this hook for our own `set_settings` below.
-            # It would converge anyway — a normalized plate normalizes to itself, so the second
-            # pass writes nothing — but a settings write from inside a settings callback is
-            # exactly the shape that loops, and relying on convergence to stop a loop is not a
-            # guarantee.
+            # Reached only if a runtime re-enters this hook for our own `set_settings`. The
+            # Python SDK documents that it does not, but a settings write triggered by a
+            # settings callback is exactly the shape that loops, and relying on the write
+            # converging to stop a loop is not a guarantee.
             self.log("iparking: on_settings re-entered by our own write; ignored")
             return
         self._settings_busy = True
@@ -535,24 +642,21 @@ class VisitCarDevice_(device.Device):
             if values is None:
                 self.log("iparking: on_settings gave no readable settings; re-reading them")
                 values = await self._device_settings()
-            values = await self._normalize_plates(values)
+            values, writes = self._normalized(values)
+            self._schedule_normalize(writes)
             await self._reconcile_buttons(values)
         finally:
             self._settings_busy = False
 
-    async def _normalize_plates(self, values: dict) -> dict:
-        """Write every accepted plate back in its normalized form, and return the fixed dict.
+    def _normalized(self, values: dict) -> tuple[dict, dict]:
+        """`(settings with every accepted plate normalized, the subset that changed)`.
 
-        This is **the one runtime settings write in the app**, and it is deliberate: the
-        maintainer's own example is `12가 3456`, with a space, and a user who saves that and
-        sees it unchanged has no way to know whether the space was a problem. Writing
-        `12가3456` back is the same visibility rule the settings page applies on blur.
+        Pure, and the reason the reconcile can run against the new values before the write that
+        makes them visible has happened.
 
         An **invalid** plate is left exactly as typed. Stripping it would half-fix a value that
         is still going to be rejected, and moving the user's text under them while telling them
         nothing is worse than leaving the typo where they can see it.
-
-        Only the keys are logged, never the values — a favourite's plate is still a plate.
         """
         writes = {}
         for index in range(1, MAX_FAVORITES + 1):
@@ -566,22 +670,69 @@ class VisitCarDevice_(device.Device):
                 continue
             if plate != raw:
                 writes[key] = plate
+        fixed = dict(values)
+        fixed.update(writes)
+        return fixed, writes
+
+    def _schedule_normalize(self, writes: dict) -> None:
+        """Write the normalized plates back **after** `on_settings` has returned.
+
+        This is the app's one runtime settings write, and it has to be deferred rather than
+        performed inline. The SDK's own `Device.set_settings` opens with
+
+            if self._on_settings_pending:
+                raise HomeyError("Cannot set settings while on_settings is still pending")
+
+        and `_on_settings` clears that flag only in its `finally`, *after* also overwriting its
+        cached settings with the frozen incoming dict. So an inline write could not succeed, and
+        would not have survived if it had. On the maintainer's hub the inline version failed
+        exactly this way: `fav_plate_1` stayed ``12가 3456``, space and all, while
+        `_sdk_call` logged the refusal into a hub log nobody was watching.
+
+        A task rather than a callback: `asyncio.create_task` cannot start the coroutine until
+        the loop is next free, which is necessarily after `_on_settings` has run to completion —
+        there is no `await` in it between `on_settings` returning and the flag being cleared.
+
+        Convergent, and guarded in three ways rather than by hope: nothing is scheduled when
+        there is nothing to write; a newer save **cancels** the pending write instead of racing
+        it, because the newer values are the true ones; and the write itself stands down if a
+        save is in flight when it wakes. If it fails anyway the values on disk are simply still
+        the ones the user typed, which the next save normalizes again — the operation is
+        idempotent, so a lost write costs visibility for one save and never correctness.
+        """
         if not writes:
-            return values
+            return
+        task = self._normalize_task
+        if task is not None and not task.done():
+            task.cancel()
+        self._normalize_task = asyncio.create_task(self._write_normalized(writes))
+
+    async def _write_normalized(self, writes: dict) -> None:
+        """The deferred half of `_schedule_normalize`.
+
+        Only the keys are logged, never the values — a favourite's plate is still a plate.
+        """
+        # One turn of the loop past the hook that scheduled this. `create_task` already
+        # guarantees that much; the explicit yield is margin for a runtime whose `_on_settings`
+        # awaits something after `on_settings` returns but before it clears its pending flag.
+        await asyncio.sleep(0)
+        if self._settings_busy:
+            self.log("iparking: a newer settings save is in flight; normalized write skipped")
+            return
         await self._sdk_call(
             ("set_settings", "setSettings"), writes, what=f"normalized {sorted(writes)}"
         )
-        fixed = dict(values)
-        fixed.update(writes)
-        return fixed
 
     async def _reconcile_buttons(self, settings: dict | None = None) -> None:
         """Make the tile show exactly one button per complete, valid favourite.
 
         Runs at `on_init` and on every settings save, and it is written as a full reconcile
-        rather than as a diff of the change: `changedKeys` is one of the arguments whose shape
-        is not established, and a restart has no changed keys at all. Idempotent by
+        rather than as a diff of the change: `changed_keys` describes one edit while a restart
+        has no changed keys at all, and the same code has to serve both. Idempotent by
         construction — every slot is either wanted or not, and both branches are safe to repeat.
+
+        Note what is **not** here any more: there is no write of `False` to a freshly added
+        button. The capabilities are `getable: false`, so there is no value to clear.
         """
         values = settings if isinstance(settings, dict) else await self._device_settings()
         favorites, rejected = read_favorites(values)
@@ -614,8 +765,6 @@ class VisitCarDevice_(device.Device):
                 continue
             await self._label_button(capability, favorite.name, language)
             self._listen(capability, index)
-            # Clears a `true` left latched by a press that the app restarted through.
-            await self._set(capability, False)
 
     async def _label_button(self, capability: str, name: str, language: str) -> None:
         """Put `[엄마차 방문 등록]` on the button.
@@ -623,13 +772,10 @@ class VisitCarDevice_(device.Device):
         `set_capability_options` with a `title` is the only route user input has to a tile
         label — the manifest title is static and `엄마차` is typed after install.
 
-        The title is sent as a **plain string**, which is the form Homey's own documentation
-        shows. An `{"ko": …, "en": …}` object is also legal in a manifest, but both values would
-        be the same user-typed name here, so it buys nothing and would render as
-        `[object Object]` on a runtime that expects a string. **Which one the Python runtime
-        wants cannot be settled off-device**: neither raises, and the difference is visible only
-        on the tile itself. The *spelling* that answered is logged, which is the half that one
-        real look at the device page does settle.
+        The title is sent as a **plain string**, and that is settled rather than assumed:
+        verified on the maintainer's hub 2026-08-04, where `엄마차 방문 등록` rendered correctly
+        on the tile. An `{"ko": …, "en": …}` object is also legal in a *manifest*, but both
+        values would be the same user-typed name here, so it buys nothing.
 
         The name is not in the log line. It is a nickname the user chose (`장모님차`), diagnostic
         output gets pasted into issues, and the tile already shows it to the person who typed it.
@@ -653,7 +799,7 @@ class VisitCarDevice_(device.Device):
 
             async def _pressed(*_args, slot=index, **_kwargs) -> bool:
                 # `slot=index` binds the value now: a late-bound closure over the loop
-                # variable would give all five buttons whichever slot was reconciled last.
+                # variable would give every button whichever slot was reconciled last.
                 return await self.press_favorite(slot)
 
             try:
@@ -681,39 +827,34 @@ class VisitCarDevice_(device.Device):
         the plate behind it are two different objects on a hub, and the interval between them
         includes the user editing the settings — registering a plate the user has since replaced
         is exactly the kind of write that cannot be taken back.
+
+        Nothing is written back to the capability afterwards. It is `getable: false`, so the
+        press left no value behind to reset; the `finally` that used to do it was the latch it
+        claimed to be curing.
         """
-        capability = quick_capability(index)
-        try:
-            values = await self._device_settings()
-            favorites, _rejected = read_favorites(values)
-            favorite = next((item for item in favorites if item.index == index), None)
-            if favorite is None:
-                # The slot lost its pair between the button appearing and this press.
-                self.log(f"iparking: 자주 오는 차량 슬롯 {index} has no complete pair; no write")
-                language = await compat.ui_language(self.homey)
-                await self._notify(i18n.translate("quick_unset", language))
-                await self._reconcile_buttons(values)
-                return False
-            return await self.flow_register(
-                car_number=favorite.plate, visit_date="", label=favorite.name
-            )
-        finally:
-            # A `button` capability reports `true` on press and **keeps** it. Without this the
-            # tile is a control that works exactly once, and the second press — the one that
-            # matters, because the first is when the user learns the button exists — sets the
-            # value to `true` again with no change for a listener to fire on. In `finally` so a
-            # refused or uncertain write leaves a pressable button behind too.
-            await self._set(capability, False)
+        values = await self._device_settings()
+        favorites, _rejected = read_favorites(values)
+        favorite = next((item for item in favorites if item.index == index), None)
+        if favorite is None:
+            # The slot lost its pair between the button appearing and this press.
+            self.log(f"iparking: 자주 오는 차량 슬롯 {index} has no complete pair; no write")
+            language = await compat.ui_language(self.homey)
+            await self._notify(i18n.translate("quick_unset", language))
+            await self._reconcile_buttons(values)
+            return False
+        return await self.flow_register(
+            car_number=favorite.plate, visit_date="", label=favorite.name
+        )
 
     async def _device_settings(self) -> dict:
         """This device's settings as a plain dict. `{}` only when they are truly unreadable.
 
         Coerces with `dict(values)` rather than testing `isinstance(values, dict)`. That
         distinction cost a working feature once: the runtime's `get_settings()` returns a
-        mapping that is **not** a `dict` subclass, so an `isinstance` guard discarded a perfectly
-        good answer, fell through the loop, and logged "this Device exposes no get_settings" —
-        while `dir(self)` showed the bound method right there. Every button silently vanished on
-        restart and the log actively pointed away from the cause.
+        `MappingProxyType`, which is not a `dict` subclass, so an `isinstance` guard discarded a
+        perfectly good answer, fell through the loop, and logged "this Device exposes no
+        get_settings" — while `dir(self)` showed the bound method right there. Every button
+        silently vanished on restart and the log actively pointed away from the cause.
 
         Two lessons are worth keeping in the code. A tolerance check should accept anything it
         can *use*, not only the one type it expected; and a fallback message must describe what
@@ -745,14 +886,14 @@ class VisitCarDevice_(device.Device):
     async def _sdk_call(self, names: tuple[str, ...], *args, what: str = "") -> bool:
         """Call the first of `names` this Device actually has, and **log which one answered**.
 
-        Four unverifiable spellings ride on this — `add_capability`, `remove_capability`,
-        `set_capability_options`, `set_settings` — because **no Python stub ships with the
-        CLI**, so snake_case versus camelCase cannot be checked off-device for any of them.
-        Same tactic as `_notify` and `compat.flow_card`: try both, log the winner, and one real
-        press settles all four at once.
+        Every spelling this rides on is now confirmed snake_case on hardware
+        (`add_capability`, `remove_capability`, `set_capability_options`, `set_settings`,
+        `get_settings`, `register_capability_listener`, 2026-08-04). The camelCase fallbacks
+        stay because they cost one `getattr` each and the log line names the winner, which is
+        what turned six unverifiable guesses into six measured facts in the first place.
 
-        Never fatal. A device that cannot grow a button is still a working 주차장명 sensor, and
-        that is the requirement the maintainer stated first.
+        Never fatal. A device that cannot grow a button still has a working register path, which
+        is the requirement the maintainer stated first.
 
         `what` exists so a caller can keep values out of the log line: `set_settings` is handed
         plates, and `str(args)` would print them.
@@ -777,16 +918,14 @@ class VisitCarDevice_(device.Device):
     async def _notify(self, text: str) -> None:
         """Create a Homey notification.
 
-        **Settled on hardware 2026-08-04: the call is `create_notification(text)` — one plain
-        string, positionally.** Verified against the hub's own timeline, not by the call
-        returning without raising.
+        **Settled on hardware 2026-08-04, and since confirmed against the SDK's own source: the
+        call is `create_notification(text)` — one plain string, positionally.** The manager
+        wraps it as `{"excerpt": message}` itself.
 
         The dict shape `create_notification({"excerpt": text})` is tried **last**, and that
         ordering is the whole fix. It used to be tried second, it did **not raise**, it logged
         "ok", and it put a dict inside the notification's `excerpt` field — so every message
         this app posted rendered as a blank line in the timeline while the log claimed success.
-        Homey's own managers post `excerpt` as a plain string; comparing our rows against
-        theirs is what exposed it.
 
         The lesson worth keeping: **a call that does not raise is not a call that worked.** A
         shape probe needs a check on the observable result, and where there is none, the shape
@@ -798,6 +937,11 @@ class VisitCarDevice_(device.Device):
 
         Never fatal: a registration that succeeded must not be reported as failed because the
         notification could not be posted.
+
+        **This is the only user-visible channel a tile press has.** The Python SDK exposes no
+        toast, alert or transient-message call of any kind — see the note in
+        `press_favorite`'s caller chain and the report for task #14 — so a press that succeeds
+        says so here, in the timeline, and nowhere else.
         """
         manager = getattr(self.homey, "notifications", None)
         if manager is None:
@@ -829,6 +973,7 @@ class VisitCarDevice_(device.Device):
                 return
         self.log("iparking: notifications manager exposes no create_notification")
 
+
     # --- helpers ------------------------------------------------------------
 
     async def _set(self, capability: str, value) -> None:
@@ -836,7 +981,11 @@ class VisitCarDevice_(device.Device):
 
         The guard is what lets this device tolerate a capability list edited in
         `driver.compose.json` without a re-pair: the real SDK raises on a capability the
-        device does not have.
+        device does not have. It is also what makes the 주차장명 removal safe — a device that
+        has already shed it simply never gets written to.
+
+        `iparking_today_count` is the **only** capability anything writes. The tile buttons are
+        `getable: false` and nothing touches them; see `_reconcile_buttons`.
         """
         if value is None or capability not in self.get_capabilities():
             return

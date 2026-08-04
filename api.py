@@ -592,6 +592,13 @@ async def get_history(homey, **kwargs) -> dict:
     except Exception as exc:
         return {"ok": False, "error": f"등록 내역을 가져오지 못했습니다: {exc}"}
 
+    # The rows are already here, so today's count is free: feeding them to the matching device
+    # keeps its 오늘 등록 tile correct the instant the user acts, at **zero extra requests**. This
+    # one hook covers the page's register *and* cancel, because `form.js` re-reads the table
+    # after both — which is why neither handler needs its own refresh. A wide window is safe:
+    # `count_registered_on` filters to today itself.
+    await _refresh_today_counts(homey, park_seq, stor_seq, rows)
+
     language = await compat.ui_language(homey)
     return {
         "ok": True,
@@ -608,6 +615,24 @@ async def get_history(homey, **kwargs) -> dict:
             for row in _newest_first(rows)
         ],
     }
+
+
+async def _refresh_today_counts(homey, park_seq: int, stor_seq: int, rows) -> None:
+    """Hand `rows` to whichever paired device covers this lot, for its 오늘 등록 count.
+
+    Entirely best-effort, and that is the design rather than laziness: this is a courtesy update
+    hanging off a read the user asked for, so a hub that exposes no driver registry, or a device
+    that objects, must cost nothing more than a tile that stays up to an hour stale. A failure
+    here must never turn a successful history fetch into an error on the page.
+    """
+    for device in compat.devices(homey, "visitcar"):
+        note = getattr(device, "note_history", None)
+        if note is None:
+            continue
+        try:
+            await note(park_seq, stor_seq, rows)
+        except Exception as exc:
+            _log(homey, f"iparking: 오늘 등록 count update skipped: {exc}")
 
 
 def _newest_first(rows: list) -> list:

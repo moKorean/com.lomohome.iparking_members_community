@@ -35,9 +35,10 @@ from conftest import (
     lots_ok,
 )
 
-from iparking_lib import i18n
+from iparking_lib import const, i18n
 from iparking_lib.const import (
     CAPABILITY_PARK_NAME,
+    CAPABILITY_TODAY_COUNT,
     FLOW_REGISTER_VISITOR,
     FLOW_REGISTER_VISITOR_TODAY,
     MAX_FAVORITES,
@@ -53,6 +54,7 @@ from iparking_lib.const import (
 )
 from iparking_lib.iparking import codes, dates
 from iparking_lib.iparking.client import (
+    HistoryRow,
     IparkingApiError,
     Lot,
     NotPermittedError,
@@ -85,13 +87,30 @@ class _StubApi:
     nothing.
     """
 
-    def __init__(self, *, lots=(), lot_rows=None, outcome=codes.OUTCOME_OK, error=None):
+    def __init__(self, *, lots=(), lot_rows=None, outcome=codes.OUTCOME_OK, error=None,
+                 history_rows=(), history_error=None):
         self._lots = list(lots)
         self._lot_rows = lot_rows
         self._outcome = outcome
         self._error = error
+        # A callable is allowed so a test can make the answer depend on the (mocked) clock —
+        # that is how the KST midnight rollover is driven without a second stub.
+        self._history_rows = history_rows
+        self._history_error = history_error
         self.lot_calls = []
         self.registers = []
+        self.history_calls = []
+
+    async def history(self, *, park_seq, stor_seq, start_date=None, end_date=None,
+                      car_number="", **_kwargs):
+        self.history_calls.append(
+            {"park_seq": park_seq, "stor_seq": stor_seq,
+             "start_date": start_date, "end_date": end_date, "car_number": car_number}
+        )
+        if self._history_error is not None:
+            raise self._history_error
+        rows = self._history_rows
+        return list(rows() if callable(rows) else rows)
 
     async def enumerate_lots(self):
         return list(self._lots)
@@ -168,14 +187,17 @@ def make_driver(make_homey):
 def make_device(make_homey):
     """A booted `VisitCarDevice_` whose poll task has already been dismantled.
 
-    Boot runs for real — `on_init` seeds the capability from the store, starts the task, the
-    task acquires the shared session and performs the first poll — and is then torn down, so
-    every later poll in a test is one this file drives explicitly. `_api` survives the
-    teardown, which is what makes `asyncio.run(dev._poll_once())` a shipping code path rather
-    than a re-implementation of one.
+    Boot runs for real — `on_init` reads the store, sheds the leftover 주차장명 sensor if this
+    device was paired before v0.1.4, reconciles the tile buttons, starts the poll task, and the
+    task acquires the shared session and counts today's registrations — and is then torn down, so
+    every later poll in a test is one this file drives explicitly. `_api` survives the teardown,
+    which is what makes `asyncio.run(dev._poll_once())` a shipping code path rather than a
+    re-implementation of one.
+
+    `capabilities` defaults to the one capability `driver.compose.json` declares.
     """
 
-    def _make(*, api=None, store=None, capabilities=(CAPABILITY_PARK_NAME,), ticks=30,
+    def _make(*, api=None, store=None, capabilities=(CAPABILITY_TODAY_COUNT,), ticks=30,
               notifications=None, settings=None, sdk_spelling="snake", sdk_awaitable=False,
               add_capability_error=None):
         homey = make_homey(api=api, notifications=notifications)
@@ -200,6 +222,10 @@ def make_device(make_homey):
         # The teardown is only how the test regains control; a device that reached its poll
         # loop is the state every assertion below is written against.
         dev._closing = False
+        # And the handle is dropped: that task belonged to the boot loop, which `asyncio.run` has
+        # since closed, so a later `on_uninit` gathering it would fail on the loop rather than on
+        # anything this app does. Tests that care about teardown drive it in one loop instead.
+        dev._poll_task = None
         return dev, homey
 
     return _make
@@ -665,65 +691,137 @@ def test_a_failing_notification_does_not_fail_the_registration(make_device):
     assert any("notification failed" in line for line in dev.logs)
 
 
-# --- the device: the 주차장명 sensor -------------------------------------------
+# --- 오늘 등록: the sensor that replaced 주차장명 ------------------------------
+#
+# The swap, and the poll it justifies. `iparking_park_name` was the lot's name: constant, and the
+# same string Homey already shows as the device's name, so the tile printed it twice and 24
+# requests/day went to re-confirm it. `iparking_today_count` changes whenever anybody registers a
+# car — including on the vendor's website, where this app cannot see it happen. Polling a constant
+# was waste; polling a count is what makes it true.
+#
+# Every failure guarded here is silent on a hub:
+#
+# * **Counting `CANCEL` rows** would read 6 where the honest answer is 1, and a plausible-looking
+#   number is not something a user can catch.
+# * **A cached date window** would survive KST midnight and hold yesterday's count all day.
+# * **A leftover `park_name` capability** would sit on every already-paired tile until its owner
+#   re-paired, which is the cost this shed exists to avoid.
 
 
-def test_the_capability_is_answered_from_the_store_before_any_request(make_homey):
-    """A lot's name is fixed at pairing and does not need the network to be true, so a hub
-    that boots offline shows 주차장명 immediately rather than an empty tile that looks
-    broken."""
-    homey = make_homey(api=None)
-    dev = device_mod.VisitCarDevice_(homey=homey, store=_store(),
-                                    capabilities=[CAPABILITY_PARK_NAME])
-
-    async def _boot_and_stop():
-        await dev.on_init()
-        # Read before the poll task has had a chance to run at all.
-        value = dev.get_capability_value(CAPABILITY_PARK_NAME)
-        await dev._teardown()
-        return value
-
-    assert asyncio.run(_boot_and_stop()) == PARK_NAME
+def _hist(seq: int, *, plate: str = PLATE, date: str = "", status: str = "RESERVE") -> HistoryRow:
+    """One 등록 내역 row. `date` defaults to today in KST, which is what the count is about."""
+    return HistoryRow(
+        invt_seq=seq,
+        car_number=plate,
+        invitation_date=date or dates.today_api(),
+        status=status,
+        park_name=PARK_NAME,
+    )
 
 
-def test_the_boot_poll_reads_the_name_from_the_server(make_device):
-    api = _StubApi(lot_rows=[_row(park_name="예시동 샘플아파트[출입통제C]")])
+def test_the_count_is_todays_registered_vehicles(make_device):
+    """The value the maintainer asked for, from the poll that keeps it fresh."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1), _hist(2, plate=PLATE_2)]))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 2
+
+
+def test_cancelled_rows_are_not_counted(make_device):
+    """**The counting rule, and the one that was measured wrong.** 취소 does not delete a row, it
+    flips `inot_status` and the row stays — so a day's rows are frequently mostly cancellations.
+    On the maintainer's own account this exact shape counted 6 where the honest answer was 1."""
+    rows = [_hist(1, status="CANCEL"), _hist(2, status="CANCEL"), _hist(3, status="CANCEL"),
+            _hist(4, status="CANCEL"), _hist(5, status="CANCEL"), _hist(6, status="RESERVE")]
+    dev, _homey = make_device(api=_StubApi(history_rows=rows))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+
+
+@pytest.mark.parametrize("status", ["RESERVE", "IN", "OUT"])
+def test_every_active_status_counts_as_registered(make_device, status):
+    """A car that has already entered or left was still registered today. The predicate is
+    `const.ACTIVE_STATUSES`, reused rather than re-spelled, so it cannot drift from the one the
+    register path's recovery re-query trusts."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1, status=status)]))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+    assert set(const.ACTIVE_STATUSES) == {"RESERVE", "IN", "OUT"}
+
+
+def test_a_row_for_another_day_is_not_counted_even_if_the_server_sends_it(make_device):
+    """The window is asserted client-side as well as requested. The vendor's filtering rules were
+    never characterised, and a bare number on a tile cannot reveal that it quietly covered three
+    months — which is the same reason the recovery re-query re-checks the plate it filtered on."""
+    dev, _homey = make_device(
+        api=_StubApi(history_rows=[_hist(1), _hist(2, date="20260101"), _hist(3, date="20991231")])
+    )
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+
+
+def test_a_poll_asks_for_a_single_day_window(make_device):
+    """One day, so the response stays small — and `startDate == endDate == today`, from
+    `dates.today_api()` rather than from anything cached."""
+    api = _StubApi(history_rows=[_hist(1)])
     dev, _homey = make_device(api=api)
 
-    assert api.lot_calls == [STOR_SEQ]
-    assert dev.get_capability_value(CAPABILITY_PARK_NAME) == "예시동 샘플아파트[출입통제C]"
-    assert any("lot renamed" in line for line in dev.logs)
+    call = api.history_calls[-1]
+    assert call["start_date"] == call["end_date"] == dates.today_api()
+    assert call["park_seq"] == PARK_SEQ
+    assert call["stor_seq"] == STOR_SEQ
 
 
 def test_a_poll_is_one_request_per_tick(make_device):
-    """24 requests/day/device. Politeness enforced by arithmetic rather than asserted — and
-    `parking_lots` rather than `enumerate_lots` is what keeps it one request no matter how
-    many stores the account holds."""
-    api = _StubApi(lot_rows=[_row()])
+    """24 requests/day/device. Politeness enforced by arithmetic rather than asserted."""
+    api = _StubApi(history_rows=[_hist(1)])
     dev, _homey = make_device(api=api)
-    before = len(api.lot_calls)
+    before = len(api.history_calls)
 
     asyncio.run(dev._poll_once())
 
-    assert len(api.lot_calls) == before + 1
+    assert len(api.history_calls) == before + 1
 
 
 def test_the_device_reaches_its_poll_loop(make_device):
     """The boot sequence is guarded as one block, so a failure in it cannot escape before the
     loop is entered — a device that never reaches the loop polls never again until the app
     restarts, silently."""
-    dev, _homey = make_device(api=_StubApi(lot_rows=[_row()]))
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]))
 
     assert any("next poll in" in line for line in dev.logs)
 
 
+def test_the_count_rolls_over_at_kst_midnight(make_device, monkeypatch):
+    """**The window is recomputed on every tick, never cached at `on_init`.**
+
+    Yesterday holds three registrations and today holds one. A device that captured its window at
+    boot would keep reporting 3 until the app happened to restart — wrong for a whole day, and
+    indistinguishable on the tile from a correct answer. Nothing here changes except the clock."""
+    yesterday, today = "20260804", "20260805"
+    clock = {"now": yesterday}
+    monkeypatch.setattr(dates, "today_api", lambda: clock["now"])
+    rows = [_hist(1, date=yesterday), _hist(2, date=yesterday), _hist(3, date=yesterday),
+            _hist(4, date=today)]
+    api = _StubApi(history_rows=rows)
+    dev, _homey = make_device(api=api)
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 3
+
+    clock["now"] = today                      # midnight in KST
+    asyncio.run(dev._poll_once())
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+    assert api.history_calls[-1]["start_date"] == today
+
+
 def test_one_failure_keeps_the_device_available_and_two_do_not(make_device):
     """Two rather than one: a single dropped request against a cloud API addressed over plain
-    HTTP is ordinary; two in a row is a pattern."""
+    HTTP is ordinary; two in a row is a pattern. And it has to be *said*, because the capability
+    keeps the last count it read — so a lot that stopped answering otherwise looks exactly like a
+    lot with no visitors today, which is the most ordinary reading of all."""
     assert MAX_POLL_FAILURES == 2
-    api = _StubApi(lot_rows=[_row()])
+    api = _StubApi(history_rows=[_hist(1)])
     dev, _homey = make_device(api=api)
-    api._lot_rows = RuntimeError("boom")
+    api._history_error = RuntimeError("boom")
 
     with pytest.raises(RuntimeError):
         asyncio.run(dev._poll_once())
@@ -731,17 +829,20 @@ def test_one_failure_keeps_the_device_available_and_two_do_not(make_device):
 
     with pytest.raises(RuntimeError):
         asyncio.run(dev._poll_once())
-    assert dev.availability[-1] == ("unavailable", "주차장 정보를 가져올 수 없습니다")
+    assert dev.availability[-1] == ("unavailable", "오늘 등록 현황을 가져올 수 없습니다")
+    # The last known count is kept rather than blanked: it was true when it was read, and the
+    # unavailability is what says not to trust it now.
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
 
 
 def test_recovery_makes_the_device_available_again(make_device):
-    api = _StubApi(lot_rows=[_row()])
+    api = _StubApi(history_rows=[_hist(1)])
     dev, _homey = make_device(api=api)
-    api._lot_rows = RuntimeError("boom")
+    api._history_error = RuntimeError("boom")
     for _ in range(MAX_POLL_FAILURES):
         with pytest.raises(RuntimeError):
             asyncio.run(dev._poll_once())
-    api._lot_rows = [_row()]
+    api._history_error = None
 
     asyncio.run(dev._poll_once())
 
@@ -749,57 +850,109 @@ def test_recovery_makes_the_device_available_again(make_device):
     assert dev.availability[-1] == ("available", None)
 
 
-def test_a_lot_missing_from_the_account_gets_its_own_reason(make_device):
-    """Not a transport failure, but not a healthy device either — and the remedy differs
-    (re-pair, or ask the office), so it does not borrow the network message."""
-    api = _StubApi(lot_rows=[_row()])
-    dev, _homey = make_device(api=api)
-    api._lot_rows = [_row(lot_id="1160009999", park_seq=9999)]
-
-    for _ in range(MAX_POLL_FAILURES):
-        asyncio.run(dev._poll_once())
-
-    assert dev.availability[-1][0] == "unavailable"
-    assert "다시 추가" in dev.availability[-1][1]
-    # The last known name is kept: the store value is still the truth about this device.
-    assert dev.get_capability_value(CAPABILITY_PARK_NAME) == PARK_NAME
-
-
-def test_the_lot_is_matched_on_lot_id_before_park_seq(make_device):
-    """`park_seq` is only a fallback for a deployment that stops sending `lot_id`. Matching on
-    the weaker key first could pick another store's lot that happens to share a `park_seq` —
-    the same uncertainty that kept `park_seq` out of `data.id`."""
-    api = _StubApi(lot_rows=[[
-        _row(lot_id="1160009999", park_seq=PARK_SEQ, park_name="다른 스토어의 주차장"),
-        _row(park_name="올바른 주차장"),
-    ]])
-    dev, _homey = make_device(api=api)
-
-    assert dev.get_capability_value(CAPABILITY_PARK_NAME) == "올바른 주차장"
-
-
-def test_park_seq_still_matches_when_the_lot_id_is_missing(make_device):
-    api = _StubApi(lot_rows=[[{"park_seq": PARK_SEQ, "park_name": "lot_id 없는 응답"}]])
-    dev, _homey = make_device(api=api)
-
-    assert dev.get_capability_value(CAPABILITY_PARK_NAME) == "lot_id 없는 응답"
-
-
 def test_set_is_guarded_by_get_capabilities(make_device):
     """The real SDK raises on a capability the device does not have, so the app filters
     against `get_capabilities()` itself — which is what lets a capability list be edited in
-    `driver.compose.json` without every paired device throwing."""
-    dev, _homey = make_device(api=_StubApi(lot_rows=[_row()]), capabilities=())
+    `driver.compose.json` without every paired device throwing, and what makes the 주차장명
+    removal safe on a device that has already shed it."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]), capabilities=())
 
-    assert dev.get_capability_value(CAPABILITY_PARK_NAME) is None
-    assert not any("set iparking_park_name failed" in line for line in dev.logs)
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) is None
+    assert not any("set iparking_today_count failed" in line for line in dev.logs)
+
+
+# --- updating the count without spending a request ----------------------------
+
+
+def test_a_settings_page_history_read_updates_the_tile_for_free(make_device):
+    """**Zero extra requests.** The rows are already in the handler's hand, so feeding them to
+    the device is what makes the tile correct the instant a user registers or cancels on the
+    settings page — that page re-reads the table after both actions, which is why neither
+    handler needs a refresh of its own."""
+    api = _StubApi(history_rows=[_hist(1)])
+    dev, _homey = make_device(api=api)
+    before = len(api.history_calls)
+
+    asyncio.run(dev.note_history(PARK_SEQ, STOR_SEQ, [_hist(1), _hist(2, plate=PLATE_2)]))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 2
+    assert len(api.history_calls) == before
+
+
+def test_another_lots_history_read_does_not_touch_this_devices_count(make_device):
+    """One device per parking lot, and a multi-lot account is the ordinary case. A device that
+    counted every lot's rows would show its neighbour's visitors."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]))
+
+    asyncio.run(dev.note_history(SECOND_PARK_SEQ, SECOND_STOR_SEQ,
+                                 [_hist(1), _hist(2), _hist(3)]))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+
+
+def test_a_three_month_history_read_still_only_counts_today(make_device):
+    """The settings table's default window is three months. Feeding it here must not turn a wide
+    fetch into a count of it — the filtering is `count_registered_on`'s, not the caller's."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[]))
+
+    asyncio.run(dev.note_history(PARK_SEQ, STOR_SEQ, [
+        _hist(1), _hist(2, date="20260601"), _hist(3, date="20260713"),
+        _hist(4, date="20260714", status="CANCEL"),
+    ]))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+
+
+def test_a_register_for_today_refreshes_the_count_immediately(make_device):
+    """The tile should be right the moment the user acts, not up to an hour later. A re-read
+    rather than an increment: incrementing would put a number on the tile that no server ever
+    confirmed, and reporting what the vendor says is registered is this capability's whole job."""
+    rows = [_hist(1)]
+    api = _StubApi(history_rows=rows)
+    dev, _homey = make_device(api=api, notifications=FakeNotifications())
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+    rows.append(_hist(2, plate=PLATE_2))          # the write the register is about to make
+
+    asyncio.run(dev.flow_register(car_number=PLATE_2, visit_date=""))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 2
+
+
+def test_a_register_for_a_future_date_spends_no_request_on_the_count(make_device):
+    """Next Tuesday's registration changes no count, so it must not pay a request to discover
+    that. The check is on the date the write actually used, not on the argument."""
+    api = _StubApi(history_rows=[_hist(1)])
+    dev, _homey = make_device(api=api, notifications=FakeNotifications())
+    before = len(api.history_calls)
+    future = (dates.now_kst() + timedelta(days=9)).strftime("%Y-%m-%d")
+
+    asyncio.run(dev.flow_register(car_number=PLATE_2, visit_date=future))
+
+    assert len(api.history_calls) == before
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+
+
+def test_a_failed_count_refresh_does_not_fail_a_registration_that_succeeded(make_device):
+    """The single most important ordering in this method. The write has already happened and the
+    user has already been notified; a tile refresh that cannot read is a stale number, not a
+    failed registration, and reporting it as one is the thing this app must never do."""
+    api = _StubApi(history_rows=[_hist(1)])
+    notifications = FakeNotifications()
+    dev, _homey = make_device(api=api, notifications=notifications)
+    api._history_error = RuntimeError("count read failed")
+
+    assert asyncio.run(dev.flow_register(car_number=PLATE_2, visit_date="")) is True
+    assert len(notifications.excerpts) == 1
+
+
+# --- the poll task's own lifecycle -------------------------------------------
 
 
 def test_a_dead_poll_task_is_restarted_and_the_handle_is_reassigned(make_device):
     """Both halves were bugs in the sibling app first. Without the reassignment a later
     `on_uninit` cancels the dead original, the restarted loop outlives the device, and it
     keeps writing capability values to a torn-down Device."""
-    dev, _homey = make_device(api=_StubApi(lot_rows=[_row()]))
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]))
 
     async def _kill_and_observe():
         async def _boom():
@@ -824,7 +977,7 @@ def test_a_dismantled_task_is_not_restarted(make_device):
     """`on_uninit` cancels the task and the cancellation lands on the bare sleep outside the
     try, so a dismantled device also reaches the done-callback. `task.cancelled()` is the only
     thing separating the two cases."""
-    dev, _homey = make_device(api=_StubApi(lot_rows=[_row()]))
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]))
 
     async def _cancel_and_observe():
         async def _forever():
@@ -847,7 +1000,7 @@ def test_a_dismantled_task_is_not_restarted(make_device):
 def test_the_restart_backoff_walks_its_steps(make_device, monkeypatch):
     """A crash loop costs 5 s once and 300 s thereafter, so a genuine bug leaves a readable
     log rather than a flood."""
-    dev, _homey = make_device(api=_StubApi(lot_rows=[_row()]))
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]))
     monkeypatch.setattr(device_mod.asyncio, "sleep", _no_sleep)
     monkeypatch.setattr(dev, "_run", _noop)
 
@@ -864,21 +1017,25 @@ def test_the_restart_backoff_walks_its_steps(make_device, monkeypatch):
     assert seen[-1] == POLL_BACKOFF_S[-1]
 
 
-def test_teardown_awaits_the_task_so_nothing_outlives_the_device(make_homey):
-    dev = device_mod.VisitCarDevice_(homey=make_homey(api=_StubApi(lot_rows=[_row()])),
-                                    store=_store(), capabilities=[CAPABILITY_PARK_NAME])
+def test_teardown_awaits_both_tasks_so_nothing_outlives_the_device(make_homey):
+    """The poll loop **and** the deferred settings write. Either one landing after Homey considers
+    the device gone is a write against a torn-down object."""
+    dev = device_mod.VisitCarDevice_(homey=make_homey(api=_StubApi(history_rows=[])),
+                                    store=_store(), capabilities=[CAPABILITY_TODAY_COUNT])
 
     async def _boot_and_uninit():
         await dev.on_init()
         for _ in range(30):
             await asyncio.sleep(0)
+        poll = dev._poll_task
         await dev.on_uninit()
-        return dev._poll_task
+        return poll
 
-    task = asyncio.run(_boot_and_uninit())
+    poll = asyncio.run(_boot_and_uninit())
 
-    assert task.done()
+    assert poll.done()
     assert dev._closing is True
+    assert dev._normalize_task is None
 
 
 async def _no_sleep(seconds, *args, **kwargs):
@@ -889,13 +1046,61 @@ async def _noop(*args, **kwargs):
     return None
 
 
+# --- the 주차장명 sensor that is gone -----------------------------------------
+
+
+def test_an_already_paired_device_sheds_the_park_name_sensor_at_init(make_device):
+    """No re-pair. An existing device is re-created from its store on every app start, carrying
+    the capability list Homey has on file — so `on_init` is the only place that can take a
+    removed capability away, and `remove_capability` is confirmed working on hardware."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]),
+                              capabilities=(CAPABILITY_PARK_NAME, CAPABILITY_TODAY_COUNT),
+                              settings=_favorite_settings((1, FAV_NAME, PLATE)))
+
+    assert CAPABILITY_PARK_NAME not in dev.get_capabilities()
+    assert any(f"remove_capability({CAPABILITY_PARK_NAME}) ok" in line for line in dev.logs)
+    # And it takes nothing with it: the new sensor and the buttons are both live.
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+    assert _quick(dev) == [quick_capability(1)]
+
+
+def test_a_device_paired_after_the_removal_has_nothing_to_shed(make_device):
+    """The shed is a no-op rather than a guessed cleanup: a fresh device never had the
+    capability, and a log line claiming to have removed one would be a false trail."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[]))
+
+    assert not any("remove_capability" in line for line in dev.logs)
+
+
+def test_no_park_name_machinery_survives_anywhere(make_device):
+    """A disabled shell of the old sensor would be worse than the sensor: the next maintainer
+    would restore it, believing it had merely been switched off. The *id* stays — `_shed_park_name`
+    needs it — but nothing reads a lot name, and `parking_lots` is pairing's call now, not the
+    device's."""
+    source = (ROOT / "iparking_lib/visitcar/device.py").read_text(encoding="utf-8")
+
+    for gone in ("_name_from", "parking_lots(", "STORE_PARK_NAME", "self._park_name"):
+        assert gone not in source, f"{gone} still lives in device.py"
+
+
+def test_the_only_capability_value_written_is_the_count(make_device):
+    """The push-button fix, guarded at the source. The tile buttons are `getable: false`, so there
+    is no value to write and nothing to un-latch — and the v0.1.3 `finally` that wrote `False`
+    back was the latch it claimed to be curing. Exactly one `_set` call may exist, and it is the
+    count's."""
+    source = (ROOT / "iparking_lib/visitcar/device.py").read_text(encoding="utf-8")
+
+    assert source.count("await self._set(") == 1
+    assert "await self._set(CAPABILITY_TODAY_COUNT" in source
+
+
 # --- criteria that are about absence -----------------------------------------
 
 
 def test_v010_makes_no_runtime_store_writes():
     """Criterion 18 — a goal, not a ban. `stor_seq`, `park_seq` and `lot_id` are fixed at
-    pairing and `park_name` lives on the capability, so there is nothing for a store write to
-    do; the pattern exists in `com.lomohome.localthings` if a later version needs one."""
+    pairing, so there is nothing for a store write to do; the pattern exists in
+    `com.lomohome.localthings` if a later version needs one."""
     for name in ("driver.py", "device.py"):
         source = (ROOT / "iparking_lib/visitcar" / name).read_text(encoding="utf-8")
         # The call, not the word: both modules discuss `set_store_value` in prose, and a
@@ -914,27 +1119,42 @@ def test_the_visitcar_layer_is_the_only_one_that_imports_homey():
         assert "import homey" not in path.read_text(encoding="utf-8")
 
 
-def test_the_capability_is_a_read_only_string_sensor_with_no_insights():
-    """The one capability, and the fields that make it legal at all: Homey has no free-text
-    tile *input*, so a string capability must be `setable: false` with `uiComponent: sensor`.
+def test_the_park_name_capability_schema_is_gone_for_good():
+    """Removing the sensor from the device is only half of it. While the schema is still declared
+    app-wide, any code path that calls `add_capability` with it succeeds — so deleting the file
+    is what makes the removal irreversible by accident. The *id* stays in `const` on purpose:
+    `_shed_park_name` needs it to take the capability off devices that already have it."""
+    assert not (ROOT / ".homeycompose/capabilities/iparking_park_name.json").exists()
+    assert const.CAPABILITY_PARK_NAME == "iparking_park_name"
+    declared = {path.stem for path in (ROOT / ".homeycompose/capabilities").glob("*.json")}
+    assert declared == {CAPABILITY_TODAY_COUNT} | {
+        quick_capability(index) for index in range(1, MAX_FAVORITES + 1)
+    }
 
-    `insights` is absent deliberately. The schema permits it on a string, but this value is
-    the name of a parking lot — it changes when a building office renames the lot, i.e.
-    approximately never — so logging it would produce an empty graph and nothing else. See
-    `const.CAPABILITY_PARK_NAME`, which says so where a maintainer editing the JSON will look.
-    """
+
+def test_the_count_is_a_read_only_integer_sensor_with_insights():
+    """The fields that make it legal and legible: nothing on a tile may write it (`setable: false`
+    + `uiComponent: sensor`), and `decimals: 0` because a count of cars is an integer — Homey
+    would otherwise render `1.0`.
+
+    **`insights: true` is the opposite decision from the one 주차장명 got, for the same reason.**
+    A near-constant string graphed over time is an empty graph. A count of registrations per day
+    is a real measurement, and the graph answers a real question."""
     spec = json.loads(
-        (ROOT / ".homeycompose/capabilities/iparking_park_name.json").read_text(
+        (ROOT / ".homeycompose/capabilities/iparking_today_count.json").read_text(
             encoding="utf-8"
         )
     )
 
-    assert spec["type"] == "string"
+    assert spec["type"] == "number"
     assert spec["uiComponent"] == "sensor"
     assert spec["getable"] is True
     assert spec["setable"] is False
-    assert spec["title"] == {"ko": "주차장", "en": "Parking lot"}
-    assert "insights" not in spec
+    assert spec["decimals"] == 0
+    assert spec["min"] == 0
+    assert spec["insights"] is True
+    assert spec["title"] == {"ko": "오늘 등록", "en": "Registered today"}
+    assert spec["units"] == {"ko": "대", "en": "cars"}
 
 
 def test_the_flow_card_makes_the_date_optional_and_the_plate_required():
@@ -1000,24 +1220,26 @@ def _card(card_id: str) -> dict:
     )
 
 
-def test_the_driver_declares_one_capability_and_no_poll_knob():
-    """The driver's *static* capability list stays at one, and that is the 자주 오는 차량 design
-    rather than an omission: the five `iparking_quick_*` schemas are declared app-wide, but a
-    freshly paired device must start with **zero** buttons. Listing them here would give every
-    device five, three of them dead, which is exactly what `add_capability` exists to avoid.
+def test_the_driver_declares_exactly_the_today_count_sensor():
+    """**One, and it is 오늘 등록.** Every paired device has it from pairing, which is also what
+    keeps a freshly paired lot from being capability-less: the ten `iparking_quick_*` schemas are
+    declared app-wide but must be added per device, because a new lot has no favourites yet and
+    listing any of them here would hand every device a dead button.
 
-    Still no `poll_interval`: the sensor is a lot's name, which changes approximately never, so
-    a knob could only invite the tightening the 3600 s cadence exists to avoid."""
+    Still no `poll_interval`: the count is already updated the instant this app's own register,
+    cancel or history read answers, so a knob could only invite the tightening the 3600 s cadence
+    exists to avoid."""
     spec = json.loads(
         (ROOT / "drivers/visitcar/driver.compose.json").read_text(encoding="utf-8")
     )
     settings = {item["id"]: item for item in spec["settings"]}
 
-    assert spec["capabilities"] == [CAPABILITY_PARK_NAME]
+    assert spec["capabilities"] == [CAPABILITY_TODAY_COUNT]
     assert spec["class"] == "sensor"
     assert spec["connectivity"] == ["cloud"]
     assert sorted(settings) == ["favorites"]
     assert "poll_interval" not in json.dumps(spec)
+    assert CAPABILITY_PARK_NAME not in json.dumps(spec)
 
 
 def test_both_locales_carry_the_flow_notification_keys():
@@ -1036,8 +1258,10 @@ def test_both_locales_carry_the_flow_notification_keys():
 def test_the_capability_and_driver_assets_exist():
     """`homey app validate` checks these, but only after a build; a missing driver image is
     otherwise a device with a blank tile."""
-    assert (ROOT / "assets/capabilities/parking.svg").exists()
     assert (ROOT / "assets/capabilities/visitcar.svg").exists()
+    # `parking.svg` went with the 주차장명 capability that referenced it. An orphaned asset in a
+    # public repo is the kind of thing a reader mistakes for a live surface.
+    assert not (ROOT / "assets/capabilities/parking.svg").exists()
     assert (ROOT / "drivers/visitcar/assets/icon.svg").exists()
     for name in ("small", "large", "xlarge"):
         assert (ROOT / "drivers/visitcar/assets/images" / f"{name}.png").exists()
@@ -1054,19 +1278,21 @@ def test_lots_ok_still_describes_the_lot_these_tests_pair():
 
 # --- 자주 오는 차량: the tile buttons -------------------------------------------
 #
-# Ten settings in, up to five buttons out, and the failures worth guarding against are again
+# Twenty settings in, up to ten buttons out, and the failures worth guarding against are again
 # the silent ones:
 #
 # * **A pair that does not count produces nothing.** A user who typed `12가 456` sees no button
 #   and gets no error, so the rejection has to reach the log naming the slot — otherwise the
 #   only diagnosis available is "it doesn't work".
-# * **A button that latches works exactly once.** `true` on press is sticky, and the press that
-#   matters is the second one.
+# * **A button that latches looks like a switch somebody left on.** That was the v0.1.3 defect,
+#   and it is now prevented in the *manifest* (`getable: false`) rather than papered over with a
+#   reset write — so what is tested is that nothing writes a capability value at all.
 # * **A button that outlives its pair is a live control wired to a deleted plate**, and pressing
 #   it writes to a building.
-# * **The SDK spellings cannot be checked off-device at all** (no Python stub ships with the
-#   CLI), so the tolerance is tested against a fake that implements exactly one contract at a
-#   time — a permissive fake would pass whichever spelling the code happened to try first.
+# * **The SDK spellings are confirmed snake_case on hardware**, but the tolerance stays and is
+#   tested against a fake that implements exactly one contract at a time — a permissive fake
+#   would pass whichever spelling the code happened to try first, which is precisely how the
+#   `create_notification` dict shape got through review.
 
 FAV_NAME = "엄마차"
 FAV_NAME_2 = "아빠차"
@@ -1090,19 +1316,30 @@ def _quick(dev) -> list[str]:
     return [cap for cap in dev.get_capabilities() if cap.startswith("iparking_quick_")]
 
 
-def _save(dev, settings: dict):
-    """Save device settings the way a hub does: **persist them, then** call the hook.
+async def _save(dev, settings: dict):
+    """Save device settings the way a hub does. Three details are faithful, and each was a bug.
 
-    The order is faithful on purpose. Homey has already stored the new values by the time
-    `on_settings` runs, which is what makes `press_favorite`'s re-read of `get_settings()` see
-    the same favourite the reconcile just built a button for. A helper that only passed the
-    event object would leave the two disagreeing and hide exactly that.
+    * **The new values are persisted before the hook runs.** Homey has already stored them by
+      the time `on_settings` is called, which is what makes `press_favorite`'s re-read of
+      `get_settings()` see the same favourite the reconcile just built a button for.
+    * **`set_settings` is refused for the duration of the hook.** `Device._on_settings` sets
+      `_on_settings_pending` around the call and `Device.set_settings` raises while it is set —
+      so an inline write-back cannot land. On the maintainer's hub it did not: `fav_plate_1`
+      stayed ``12가 3456`` and the refusal went into a log nobody was watching.
+    * **The loop keeps turning after the hook returns.** The write-back is a scheduled task, so
+      a helper that stopped at `on_settings`'s return would report it as never happening.
     """
     old = dict(dev.settings)
     dev.settings = dict(settings)
-    return dev.on_settings(
-        {"oldSettings": old, "newSettings": dict(settings), "changedKeys": sorted(settings)}
-    )
+    dev.on_settings_pending = True
+    try:
+        await dev.on_settings(
+            {"oldSettings": old, "newSettings": dict(settings), "changedKeys": sorted(settings)}
+        )
+    finally:
+        dev.on_settings_pending = False
+    for _ in range(5):
+        await asyncio.sleep(0)
 
 
 # --- what counts as a pair ----------------------------------------------------
@@ -1155,9 +1392,10 @@ def test_a_rejected_slot_is_named_in_the_log_with_the_plate_masked(make_device):
 
 @pytest.mark.parametrize("count", [0, 1, 3, MAX_FAVORITES])
 def test_a_device_shows_exactly_as_many_buttons_as_it_has_pairs(make_device, count):
-    """The whole reason five capabilities are declared statically but added at runtime: a
-    device with two favourites must not show five buttons, three of them dead."""
-    plates = [PLATE, PLATE_2, "56다1234", "임1234", "외교123456"]
+    """The whole reason ten capabilities are declared statically but added at runtime: a
+    device with two favourites must not show ten buttons, eight of them dead."""
+    plates = [PLATE, PLATE_2, "56다1234", "임1234", "외교123456",
+              "78마9012", "90바3456", "11사7890", "22아1234", "33자5678"]
     dev, _homey = make_device(
         api=_StubApi(lot_rows=[_row()]),
         settings=_favorite_settings(
@@ -1178,7 +1416,6 @@ def test_the_buttons_are_reconciled_at_on_init_so_a_restart_does_not_lose_them(m
     )
 
     assert _quick(dev) == [quick_capability(1), quick_capability(3)]
-    assert dev.get_capability_value(CAPABILITY_PARK_NAME) == PARK_NAME
 
 
 def test_the_button_label_is_the_favourites_own_name(make_device):
@@ -1252,6 +1489,13 @@ def test_a_plate_broken_after_the_fact_also_takes_the_button_away(make_device):
 
 
 # --- the normalized write-back ------------------------------------------------
+#
+# The write itself is old; **the deferral is the fix**. It has to happen after `on_settings`
+# returns, because the SDK refuses it while the hook is pending (`_save` models that refusal, and
+# `conftest.Device._set_settings` raises the SDK's own sentence). Inline, on the maintainer's hub,
+# `fav_plate_1` stayed ``12가 3456`` — space included — while the log recorded a failure nobody
+# was reading. Two properties are asserted separately because they fail separately: that the
+# value ends up normalized, and that the write did not happen inside the window.
 
 
 def test_on_settings_writes_the_normalized_plate_back_so_the_user_sees_it(make_device):
@@ -1265,6 +1509,88 @@ def test_on_settings_writes_the_normalized_plate_back_so_the_user_sees_it(make_d
     assert dev.setting_writes == [{favorite_plate_setting(1): PLATE}]
     assert dev.settings[favorite_plate_setting(1)] == PLATE
     assert _quick(dev) == [quick_capability(1)]
+
+
+def test_the_write_back_is_deferred_until_the_hook_has_returned(make_device):
+    """The carried-over defect, pinned. `set_settings` raises for the whole duration of
+    `on_settings` — so the assertion that matters is not "the value is normalized" (an inline
+    write would leave the *in-memory* dict normalized too and still never reach the hub) but
+    that **nothing was written while the hook was running** and the write landed afterwards."""
+    dev, _homey = make_device(api=_StubApi(lot_rows=[_row()]))
+
+    async def _observe():
+        dev.settings = _favorite_settings((1, FAV_NAME, PLATE_WITH_SPACE))
+        dev.on_settings_pending = True
+        await dev.on_settings({"newSettings": dict(dev.settings)})
+        during = list(dev.setting_writes)
+        # The hub clears its flag only after the hook has returned; until then a write raises.
+        dev.on_settings_pending = False
+        for _ in range(5):
+            await asyncio.sleep(0)
+        return during, list(dev.setting_writes)
+
+    during, after = asyncio.run(_observe())
+
+    assert during == []
+    assert after == [{favorite_plate_setting(1): PLATE}]
+    assert not any("failed" in line for line in dev.logs)
+
+
+def test_the_button_appears_on_the_same_save_that_the_write_is_deferred_from(make_device):
+    """Deferring the *write* must not defer the *feature*. The reconcile runs against the
+    normalized dict in memory, so `12가 4567` produces a working button on the save it was typed
+    on rather than on the next one — the visible write-back is only about the user seeing what
+    was stored."""
+    api = _StubApi()
+    dev, _homey = make_device(api=api, notifications=FakeNotifications())
+
+    asyncio.run(_save(dev, _favorite_settings((1, FAV_NAME, PLATE_WITH_SPACE))))
+    asyncio.run(dev.press(quick_capability(1)))
+
+    assert _quick(dev) == [quick_capability(1)]
+    assert api.registers[0]["car_number"] == PLATE
+
+
+def test_a_second_save_supersedes_a_pending_write_rather_than_racing_it(make_device):
+    """Two saves in quick succession: the newer values are the true ones, so the pending write is
+    cancelled instead of being allowed to land after them. Convergent either way — the plate is
+    idempotent under normalization — but "either way" is not an ordering guarantee."""
+    dev, _homey = make_device(api=_StubApi())
+
+    async def _two_saves():
+        first = _favorite_settings((1, FAV_NAME, PLATE_WITH_SPACE))
+        second = _favorite_settings((1, FAV_NAME, "34나 7890"))
+        dev.settings = dict(first)
+        await dev.on_settings({"newSettings": dict(first)})
+        dev.settings = dict(second)
+        await dev.on_settings({"newSettings": dict(second)})
+        for _ in range(5):
+            await asyncio.sleep(0)
+
+    asyncio.run(_two_saves())
+
+    assert dev.setting_writes == [{favorite_plate_setting(1): PLATE_2}]
+    assert dev.settings[favorite_plate_setting(1)] == PLATE_2
+
+
+def test_on_uninit_cancels_a_pending_write_so_nothing_outlives_the_device(make_device):
+    """The poll task is gone; the scheduled write is the only thing this device can still have in
+    flight. A `set_settings` that lands after Homey considers the device gone is a write against a
+    torn-down object, which is the bug the poll task's teardown existed to prevent."""
+    dev, _homey = make_device(api=_StubApi())
+
+    async def _save_then_uninit():
+        settings = _favorite_settings((1, FAV_NAME, PLATE_WITH_SPACE))
+        dev.settings = dict(settings)
+        await dev.on_settings({"newSettings": dict(settings)})
+        await dev.on_uninit()
+        for _ in range(5):
+            await asyncio.sleep(0)
+
+    asyncio.run(_save_then_uninit())
+
+    assert dev.setting_writes == []
+    assert dev._normalize_task is None
 
 
 def test_an_invalid_plate_is_left_exactly_as_the_user_typed_it(make_device):
@@ -1424,21 +1750,26 @@ def test_the_notification_names_the_favourite_the_plate_and_the_resolved_date(ma
     assert dates.format_kst_human(dates.today_api()) in excerpt
 
 
-def test_the_button_does_not_latch(make_device):
-    """A `boolean` button reports `true` on press and keeps it. Without the reset the control
-    works exactly once per app start — and the press that matters is the second one, because the
-    first is when the user finds out the button exists."""
-    dev, _homey = make_device(api=_StubApi(), notifications=FakeNotifications(),
+def test_a_button_can_be_pressed_twice(make_device):
+    """The v0.1.3 defect, from the user's side. It latched because the capability was
+    `getable: true`: the press wrote a readable `true`, Homey drew a switch that was on, and the
+    second press produced no change for a listener to fire on. With `getable: false` there is no
+    value at all — so this asserts what the maintainer actually reported, that pressing the same
+    button twice registers twice, and it does so without any reset write to make it true."""
+    api = _StubApi()
+    dev, _homey = make_device(api=api, notifications=FakeNotifications(),
                              settings=_favorite_settings((1, FAV_NAME, PLATE)))
 
     asyncio.run(dev.press(quick_capability(1)))
+    asyncio.run(dev.press(quick_capability(1)))
 
-    assert dev.get_capability_value(quick_capability(1)) is False
+    assert [call["car_number"] for call in api.registers] == [PLATE, PLATE]
 
 
-def test_the_button_is_pressable_again_even_after_a_refused_write(make_device):
-    """The reset is in a `finally` for this: a refusal the user can fix must not also leave them
-    with a dead button."""
+def test_a_refused_press_leaves_the_button_alone(make_device):
+    """A refusal the user can fix must not also leave them with a dead button — and the way that
+    is guaranteed now is that a press touches no state at all, so there is nothing a failed write
+    could leave behind. The old `finally` that reset the value was the latch it claimed to cure."""
     dev, _homey = make_device(api=_StubApi(error=NotPermittedError("권한 없음")),
                              notifications=FakeNotifications(),
                              settings=_favorite_settings((1, FAV_NAME, PLATE)))
@@ -1446,7 +1777,8 @@ def test_the_button_is_pressable_again_even_after_a_refused_write(make_device):
     with pytest.raises(Exception, match="관리사무소"):
         asyncio.run(dev.press(quick_capability(1)))
 
-    assert dev.get_capability_value(quick_capability(1)) is False
+    assert quick_capability(1) in dev.get_capabilities()
+    assert dev.capability_options[quick_capability(1)]["title"] == "엄마차 방문 등록"
 
 
 def test_a_press_without_permission_explains_itself_where_the_press_happened(make_device):
@@ -1593,14 +1925,16 @@ def test_the_spelling_that_answered_is_logged_so_one_real_press_settles_it(make_
                in line for line in dev.logs)
 
 
-def test_a_runtime_with_no_capability_mutators_still_gets_its_sensor(make_device):
-    """The 주차장명 capability is the requirement the maintainer stated first and it needs no
-    buttons at all, so a device that cannot grow one must still poll and still show its name."""
-    dev, _homey = make_device(api=_StubApi(lot_rows=[_row()]), sdk_spelling="none",
+def test_a_runtime_with_no_capability_mutators_still_registers(make_device):
+    """A device that cannot grow a button must still be a working Flow target — that is the
+    requirement the maintainer stated first, and the tile buttons are a convenience on top of
+    it. So `on_init` finishes, nothing raises, and `flow_register` still writes."""
+    api = _StubApi()
+    dev, _homey = make_device(api=api, sdk_spelling="none", notifications=FakeNotifications(),
                               settings=_favorite_settings((1, FAV_NAME, PLATE)))
 
-    assert dev.get_capability_value(CAPABILITY_PARK_NAME) == PARK_NAME
-    assert any("next poll in" in line for line in dev.logs)
+    assert _quick(dev) == []
+    assert asyncio.run(dev.flow_register(car_number=PLATE, visit_date="")) is True
     # The message says what was observed — that neither accessor exists — rather than guessing
     # why. An earlier version logged "exposes no get_settings" whenever the settings came back
     # unusable *for any reason*, and on the real hub the method was right there while a too-narrow
@@ -1614,22 +1948,39 @@ def test_a_failing_add_capability_does_not_take_the_device_down(make_device):
                               settings=_favorite_settings((1, FAV_NAME, PLATE)))
 
     assert _quick(dev) == []
-    assert dev.get_capability_value(CAPABILITY_PARK_NAME) == PARK_NAME
     assert any("add_capability" in line and "failed" in line for line in dev.logs)
 
 
 # --- the manifest side -------------------------------------------------------
 
 
-def test_five_button_capabilities_are_declared_and_all_shaped_the_same():
-    """Homey has no dynamic-capability declaration: a capability missing from `app.json` cannot
-    be added to a device at all, so `MAX_FAVORITES` and these files have to move together — and
-    a mismatch shows up only as an `add_capability` failure on a hub."""
+def test_one_button_capability_is_declared_per_favourite_slot():
+    """**The count guard, in both directions.** Homey has no dynamic-capability declaration: a
+    capability missing from `app.json` cannot be added to a device at all, and one declared with
+    no slot behind it is dead weight in the manifest. So a file without a slot and a slot without
+    a file both fail here — on a hub the first shows up only as an `add_capability` error and the
+    second not at all."""
     directory = ROOT / ".homeycompose/capabilities"
 
-    assert sorted(path.name for path in directory.glob("iparking_quick_*.json")) == [
+    assert {path.name for path in directory.glob("iparking_quick_*.json")} == {
         f"{quick_capability(index)}.json" for index in range(1, MAX_FAVORITES + 1)
-    ]
+    }
+    assert MAX_FAVORITES == 10
+
+
+def test_every_button_capability_is_a_momentary_push_button():
+    """The push-button fix, at the manifest level where it actually lives.
+
+    Shaped exactly like Homey's own `button`
+    (`homey-lib/assets/capability/capabilities/button.json`): `getable: false`, `setable: true`,
+    `uiComponent: "button"`, `uiQuickAction: true`.
+
+    **`getable: false` is the fix and `getable: true` was the bug.** v0.1.3 set it true and
+    justified it as needed to un-latch the press; the reasoning was inverted. A readable value
+    *is* a state, Homey renders state as a switch, and the maintainer's tile duly sat there
+    looking permanently pressed. With nothing to read there is nothing to latch and nothing to
+    reset — which is why `device.py` no longer writes a capability value anywhere."""
+    directory = ROOT / ".homeycompose/capabilities"
     for index in range(1, MAX_FAVORITES + 1):
         spec = json.loads(
             (directory / f"{quick_capability(index)}.json").read_text(encoding="utf-8")
@@ -1637,19 +1988,24 @@ def test_five_button_capabilities_are_declared_and_all_shaped_the_same():
         assert spec["type"] == "boolean"
         assert spec["uiComponent"] == "button"
         assert spec["setable"] is True
-        # `getable` — unlike Homey's own `button`, which is getable:false. The press has to be
-        # un-latched afterwards, and a value that cannot be read cannot be reset either.
-        assert spec["getable"] is True
+        assert spec["getable"] is False
+        assert spec["uiQuickAction"] is True
         # A momentary button is not a measurement; an insights graph of it would be empty.
         assert "insights" not in spec
         assert spec["title"]["ko"].endswith("방문 등록")
         assert spec["title"]["en"]
+        # The `$comment` has to *teach* the right reason. Asserted positively rather than by
+        # forbidding the word "un-latch": the comment names the old justification in order to
+        # correct it, and a grep that cannot tell a rule from its retraction would fail on the
+        # explanation and then get deleted for crying wolf.
+        assert "`getable: false` is what makes this a momentary push button" in spec["$comment"]
+        assert "inverted" in spec["$comment"]
 
 
-def test_the_ten_favourite_settings_are_five_labelled_pairs_in_a_group():
-    """Ten text fields, exactly as asked for, in a group so they read as advanced settings
-    rather than cluttering the device page — and labelled in both languages, because the
-    settings page is the only place their numbering can be matched up."""
+def test_the_favourite_settings_are_labelled_pairs_in_a_group():
+    """Two text fields per slot — twenty of them — in a group so they read as advanced settings
+    rather than cluttering the device page, and labelled in both languages, because the settings
+    page is the only place their numbering can be matched up."""
     spec = json.loads(
         (ROOT / "drivers/visitcar/driver.compose.json").read_text(encoding="utf-8")
     )

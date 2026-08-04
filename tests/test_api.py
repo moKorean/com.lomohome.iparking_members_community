@@ -21,7 +21,7 @@ import asyncio
 import json
 
 import pytest
-from conftest import STOR_SEQ
+from conftest import STOR_SEQ, FakeDrivers
 
 import api
 from iparking_lib.const import SETTING_PASSWORD, SETTING_USERNAME
@@ -579,6 +579,70 @@ def test_history_keys_each_row_on_is_active_not_on_presence(make_homey):
     assert [row["is_active"] for row in rows] == [True, False]
     assert rows[1]["status"] == "CANCEL"
     assert rows[1]["invt_seq"] == 3184551
+
+
+# --- the 오늘 등록 count, updated for free ---------------------------------------
+
+
+class _CountingDevice:
+    """A stand-in for a paired `VisitCarDevice_`, exposing only what `api.py` calls on it."""
+
+    def __init__(self, error=None):
+        self.notes = []
+        self._error = error
+
+    async def note_history(self, park_seq, stor_seq, rows):
+        self.notes.append((park_seq, stor_seq, len(rows)))
+        if self._error is not None:
+            raise self._error
+
+
+def test_a_history_read_feeds_the_devices_today_count(make_homey):
+    """**Zero extra requests.** The rows are already in the handler's hand, so passing them on is
+    what makes the 오늘 등록 tile correct the instant a user registers or cancels on the settings
+    page — `form.js` re-reads the table after both actions, which is why neither of those handlers
+    needs a refresh of its own."""
+    session = _HistoryApi(rows=[_row(PLATE, "20260805", "RESERVE")])
+    device = _CountingDevice()
+    homey = make_homey(api=session, drivers=FakeDrivers(visitcar=[device]))
+
+    result = asyncio.run(api.get_history(
+        homey, query={"park_seq": PARK_SEQ, "stor_seq": STOR_SEQ}
+    ))
+
+    assert result["ok"] is True
+    assert device.notes == [(PARK_SEQ, STOR_SEQ, 1)]
+    # One request, the one the page asked for. The count came out of its answer.
+    assert len(session.history_calls) == 1
+
+
+def test_a_device_that_objects_does_not_spoil_the_history_response(make_homey):
+    """The count update is a courtesy hanging off a read the user asked for. A failure in it must
+    never turn a successful history fetch into an error on the page."""
+    session = _HistoryApi(rows=[_row(PLATE, "20260805", "RESERVE")])
+    device = _CountingDevice(error=RuntimeError("tile write refused"))
+    homey = make_homey(api=session, drivers=FakeDrivers(visitcar=[device]))
+
+    result = asyncio.run(api.get_history(
+        homey, query={"park_seq": PARK_SEQ, "stor_seq": STOR_SEQ}
+    ))
+
+    assert result["ok"] is True
+    assert [row["car_number"] for row in result["rows"]] == [PLATE]
+
+
+def test_a_runtime_with_no_driver_registry_still_answers_the_history_read(make_homey):
+    """`homey.drivers` is not in the fake unless a test asks for it, which is the branch this
+    covers: `compat.devices` returns `[]` and the user pays a tile that is up to an hour stale,
+    not an error."""
+    session = _HistoryApi(rows=[_row(PLATE, "20260805", "RESERVE")])
+    homey = make_homey(api=session)
+
+    result = asyncio.run(api.get_history(
+        homey, query={"park_seq": PARK_SEQ, "stor_seq": STOR_SEQ}
+    ))
+
+    assert result["ok"] is True
 
 
 def test_history_rows_come_out_newest_first(make_homey):

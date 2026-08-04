@@ -255,6 +255,78 @@ def test_a_missing_or_junk_response_is_an_error_not_a_success():
     assert got == ["error", "error", "error"]
 
 
+# --- registerToast: only a real registration, and only "오늘" when it is -------
+#
+# The toast is the page's own element (Homey's SDK has no transient-message call at all), so the
+# only thing worth testing off-browser is the decision: which outcomes get one, and what it says.
+# Both halves can go wrong quietly. A toast over `already` or `uncertain` would announce a
+# registration this click did not make, and a toast saying 오늘 for a future visit date would be
+# the same silent wrong-day error the date echo exists to catch.
+
+STATUS_KST = {"today_kst": "2026-08-05", "max_date": "2026-09-04", "max_days_ahead": 30}
+
+
+def _toast(verdict, status=None, lang="ko"):
+    return run_js(
+        f"out(F.registerToast({json.dumps(verdict)}, "
+        f"{json.dumps(status if status is not None else STATUS_KST)}, {json.dumps(lang)}));"
+    )
+
+
+def test_only_a_real_registration_gets_a_toast():
+    """`already` means the vehicle was registered *before* this click and `uncertain` means
+    nobody knows — flattening either into a success toast would be a claim about a building's
+    access control that this app cannot support."""
+    for state in ("already", "uncertain", "error"):
+        verdict = {
+            "state": state,
+            "response": {"ok": True, "car_number": "12가3456", "api_date": "20260805"},
+        }
+        assert _toast(verdict) == ""
+
+
+def test_a_registration_for_today_says_today():
+    """The wording the maintainer asked for, verbatim."""
+    verdict = {"state": "ok", "response": {"car_number": "12가3456", "api_date": "20260805",
+                                           "date": "2026년 8월 5일 (수)"}}
+
+    assert _toast(verdict) == "12가3456 차량이 오늘 방문 등록되었습니다."
+
+
+def test_a_registration_for_another_day_names_that_day_instead_of_saying_today():
+    """`api_date` is compared against `/status`'s `today_kst` — both server-side KST values, so
+    `new Date()` stays uninvolved. A tile press is always today, which is where the 오늘 wording
+    comes from; this page can register any date in the window, and calling next Tuesday "오늘"
+    would send a visitor to a gate on the wrong day believing the app agreed."""
+    verdict = {"state": "ok", "response": {"car_number": "12가3456", "api_date": "20260812",
+                                           "date": "2026년 8월 12일 (수)"}}
+
+    assert _toast(verdict) == "12가3456 차량이 2026년 8월 12일 (수) 방문 등록되었습니다."
+
+
+def test_an_unknown_today_names_the_date_rather_than_guessing_it_is_today():
+    """`/status` not having answered is not evidence that the visit is today. The fallback names
+    the day the handler resolved, which is always true, instead of the one claim that might not
+    be."""
+    verdict = {"state": "ok", "response": {"car_number": "12가3456", "api_date": "20260805",
+                                           "date": "2026년 8월 5일 (수)"}}
+
+    assert _toast(verdict, status={}) == "12가3456 차량이 2026년 8월 5일 (수) 방문 등록되었습니다."
+
+
+def test_a_toast_with_no_plate_to_name_is_not_shown_at_all():
+    """An empty response field would render `" 차량이 오늘 방문 등록되었습니다."`, which reads
+    like a registration with no vehicle."""
+    assert _toast({"state": "ok", "response": {}}) == ""
+    assert _toast({"state": "ok"}) == ""
+
+
+def test_the_toast_is_translated_rather_than_hardcoded_korean():
+    verdict = {"state": "ok", "response": {"car_number": "12가3456", "api_date": "20260805"}}
+
+    assert _toast(verdict, lang="en") == "12가3456 is registered to visit today."
+
+
 # --- messageOf: prefer the viewer's language ----------------------------------
 
 def test_message_of_prefers_message_over_error():
@@ -569,7 +641,22 @@ def test_the_page_never_reimplements_a_verdict_locally(strings):
     """The three vendor-data verdicts must be asked of the module, not re-derived in the page —
     that is what makes the v0.1.1 widget a mount rather than a rewrite."""
     html = INDEX_HTML.read_text(encoding="utf-8")
-    for call in ("F.rowIsCancellable", "C.permission()", "C.dateBounds()"):
+    for call in ("F.rowIsCancellable", "C.permission()", "C.dateBounds()", "C.toast(verdict)"):
         assert call in html, f"{call} is not what the page uses"
     # `is_active` may be read for styling, but never to decide whether 취소 is offered.
     assert "row.is_active ?" not in html
+
+
+def test_the_page_owns_the_toast_element_and_its_fade():
+    """The toast is the page's own element, because Homey's SDK exposes no transient-message call
+    of any kind — `homey.js` has `alert`/`confirm`, which are modal and have to be dismissed. So
+    what is asserted is that the element and its two CSS states exist: a missing `.show` rule
+    leaves a permanently invisible toast, which no test of the *text* would notice."""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    assert 'id="toast"' in html
+    assert 'aria-live="polite"' in html
+    assert ".toast {" in html and ".toast.show {" in html
+    assert "transition:opacity" in html
+    # Never intercepts a click on the card underneath it.
+    assert "pointer-events:none" in html

@@ -59,19 +59,51 @@ The Python package is `iparking_lib` (**not** `lib`).
 - `api.py` — settings-page API handlers (`_body()`/`_query()`/`_mask()`). Never persists
   the `access_token` — it is memory-only and crosses the wire in cleartext (see
   disclosures below), so keeping it out of `homey.settings` keeps it out of hub backups.
-- `.homeycompose/` — manifest head, `capabilities/iparking_park_name.json`, five
-  `capabilities/iparking_quick_{1..5}.json` tile buttons (declared up front because Homey has
+- `.homeycompose/` — manifest head, `capabilities/iparking_today_count.json` (오늘 등록된
+  차량 수, the one capability every device carries), ten
+  `capabilities/iparking_quick_{1..10}.json` tile buttons (declared up front because Homey has
   no dynamic-capability declaration; each device adds and removes them at runtime, so
-  `MAX_FAVORITES` and these five files have to change together),
-  `flow/actions/register_visitor.json`. **Never hand-edit root `app.json`** (generated).
+  `MAX_FAVORITES` and these ten files have to change together — a test compares the count both
+  ways), `flow/actions/register_visitor.json`. **Never hand-edit root `app.json`** (generated).
+  The tile buttons are `getable: false` + `uiQuickAction: true`, exactly like Homey's own
+  `button`: that is what makes them momentary push buttons instead of latching switches, and it
+  is why nothing in the app writes a value to them.
+  `capabilities/iparking_park_name.json` was **deleted** in v0.1.4 — 주차장명 was constant and
+  duplicated the device's own name; `const.CAPABILITY_PARK_NAME` survives only so
+  `device._shed_park_name` can take it off already-paired devices without a re-pair.
 - `settings/{index.html,form.js}` — the app's **primary UI** (Homey has no free-text tile
   control). `form.js` is a plain module, not tied to the settings page's DOM, so the
   dashboard widget planned for v0.1.1 can mount the same module in ~30 lines instead of a
   rewrite.
 - `drivers/visitcar/` — driver shim, pairing views, assets. One device **per parking lot**.
-  `driver.compose.json` carries the ten 자주 오는 차량 settings (5 이름 + 5 차량번호) in a
-  `favorites` group; the driver's static `capabilities` list stays at one, because a freshly
-  paired device must start with **zero** buttons.
+  `driver.compose.json` carries the twenty 자주 오는 차량 settings (10 이름 + 10 차량번호) in a
+  `favorites` group; the driver's static `capabilities` list holds exactly
+  `iparking_today_count`, because a freshly paired device must start with **zero** buttons.
+
+## The device's one sensor, and the poll
+
+`iparking_today_count` — 오늘 등록된 차량 수 — is polled at 3600 s ± 10 % (0–10 % start offset,
+**one request per tick**, 24/day/device; `const.POLL_INTERVAL_S`). Two consecutive failures mark
+the device unavailable (`MAX_POLL_FAILURES`), because the capability keeps the last count it read
+and would otherwise look exactly like a lot with no visitors today.
+
+Three rules, and each is a defect avoided rather than a preference:
+
+- **`CANCEL` rows are not counted.** 취소 flips `inot_status` and leaves the row in the list, so a
+  day's rows are frequently mostly cancellations — counting them read 6 on the maintainer's own
+  account where the honest answer was 1. One rule, one home: `client.count_registered_on`, over
+  `const.ACTIVE_STATUSES`.
+- **The date window is recomputed every tick** from `dates.today_api()`, never cached. A cached
+  window survives KST midnight and holds yesterday's count all day, looking perfectly fine.
+- **This app's own actions update it at zero extra requests.** `api.get_history` feeds its rows to
+  the matching device (`device.note_history`), which covers the settings page's register *and*
+  cancel because `form.js` re-reads the table after both; a Flow/tile register for today calls
+  `refresh_today_count`. The poll is then only there to catch registrations made on the vendor's
+  website and the midnight rollover.
+
+**What not to "restore":** the poll used to refresh 주차장명, a constant that was also the device's
+own name. Polling a constant was waste; polling a count is what makes it true. That distinction is
+the whole justification for the traffic — do not reattach the loop to a value that cannot change.
 
 ## Disclosures — not boilerplate, keep them precise
 

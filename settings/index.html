@@ -57,6 +57,20 @@
     .row { display:flex; gap:8px; align-items:flex-end; }
     .row > div { flex:1 1 0; min-width:0; }
     .head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+
+    /* The success toast. Drawn here rather than asked of Homey on purpose: the SDK exposes no
+       transient-message call at all — `homey.js` offers `alert`/`confirm`, which are modal and
+       have to be dismissed — so a toast either belongs to this page or does not exist. Being
+       ours also means it cannot quietly stop working the way a guessed SDK call shape can.
+       `pointer-events:none` so it can never intercept a click on the card underneath, and the
+       fade is a CSS transition on `.show`: no animation loop, and one timer to clear. */
+    .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(10px);
+             max-width:calc(100% - 32px); padding:11px 18px; border-radius:20px;
+             background:#1b1b1f; color:#fff; font-size:13.5px; line-height:1.45;
+             text-align:center; box-shadow:0 6px 22px rgba(0,0,0,.24); opacity:0;
+             pointer-events:none; z-index:50;
+             transition:opacity .22s ease, transform .22s ease; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   </style>
 </head>
 <body>
@@ -140,6 +154,11 @@
 
   </div>
 
+  <!-- Outside `.wrap` because it is `position:fixed` and belongs to the viewport, not the
+       column. `role="status"` + `aria-live="polite"` so a screen reader announces a
+       registration that a sighted user sees fade in. -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <script>
     /*
      * Wiring only. Every verdict — is the account permitted, is this row cancellable, was that
@@ -174,6 +193,29 @@
       var m = el(id);
       m.textContent = text || "";
       m.className = "msg " + (cls || "");
+    }
+
+    /*
+     * Show a transient toast. **Which text, and whether there is one at all, is
+     * `C.toast(verdict)`'s decision** — this function only draws.
+     *
+     * `TOAST_MS` is generous (4 s) because the sentence names a plate and a day and this page
+     * is read on a phone. The timer is stored so a second registration replaces the first
+     * cleanly instead of the earlier timeout hiding the newer message.
+     */
+    var TOAST_MS = 4000;
+    var toastTimer = null;
+
+    function toast(text) {
+      var node = el("toast");
+      if (!node || !text) return;
+      node.textContent = text;
+      node.className = "toast show";
+      if (toastTimer !== null) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toastTimer = null;
+        node.className = "toast";
+      }, TOAST_MS);
     }
 
     function banner(id, text, cls) {
@@ -452,6 +494,11 @@
           renderHistory();
           if (verdict.state === "ok") {
             input.value = "";
+            // Only a real registration gets a toast, and `C.toast` is what decides that —
+            // `already_registered` and `uncertain` keep their own distinct wording below,
+            // because a success toast over either of them would be a lie about a building's
+            // access control.
+            toast(C.toast(verdict));
             var text = verdict.message;
             // `ambiguous` means the date string could be read two ways (a Flow `date` arg in
             // mm-dd-yyyy is shape-identical to dd-mm-yyyy). Say which day was used, so a

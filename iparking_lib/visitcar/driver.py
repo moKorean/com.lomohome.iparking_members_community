@@ -14,14 +14,21 @@ the mutable store, where a later version can correct it.
 
 **An entry that may not register still pairs.** `invitation_register_authorization_yn != "Y"`
 gates the *write*, checked live inside `client.register()` on every attempt, because the
-building office can grant the permission later. The 주차장명 sensor is useful either way, so
-refusing to pair such a store would remove a working sensor to prevent a write that is already
-prevented.
+building office can grant the permission later. Refusing to pair such a store would make a
+permission the office can grant tomorrow into a re-pair the user has to perform tomorrow, to
+prevent a write that is already prevented.
+
+**A paired device starts with zero capabilities**, and that is the shape rather than an
+oversight: the 주차장명 sensor was removed in v0.1.4 (see `visitcar/device.py`), and the tile
+buttons are added at runtime, one per 자주 오는 차량 the user fills in. `capabilities: []` in
+`driver.compose.json` validates at `--level publish`; the alternative — declaring
+`iparking_quick_1` statically — would give every freshly paired device one dead button.
 
 The Flow cards are registered here rather than in `app.py` for the same reason navien does it:
 cards are app-global but every one of them carries a `device` arg filtered to this driver, so
 the driver is the object that knows they exist. Registration is guarded — a card that fails to
-bind must not take driver init down with it, because that would cost the sensor too.
+bind must not take driver init down with it, because the tile buttons are a second, independent
+route to the same register path and they would still work.
 
 **Two cards, one write path.** `register_visitor` takes a plate plus an optional 방문 예정일;
 `register_visitor_today` takes a plate and nothing else. Both listeners resolve the targeted

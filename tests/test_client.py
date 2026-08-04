@@ -39,12 +39,14 @@ from iparking_lib.const import (
     RECOVERY_ATTEMPTS,
 )
 from iparking_lib.iparking.client import (
+    HistoryRow,
     IparkingApi,
     IparkingApiError,
     IparkingAuthError,
     IparkingError,
     NeedCredentialsError,
     NotPermittedError,
+    count_registered_on,
 )
 from iparking_lib.iparking.transport import (
     BodyRedirect,
@@ -629,10 +631,61 @@ def test_an_unparseable_history_row_is_skipped_rather_than_fatal(make_api):
     assert [r.car_number for r in rows] == ["12가4567"]
 
 
+# --- count_registered_on: the 오늘 등록 count's whole rule ----------------------
+#
+# It lives in this module — the `homey`-free client — so the rule has one home and can be checked
+# without a hub. Both filters were measured rather than assumed, and both were wrong once.
+
+
+def _row(seq: int, *, date: str = "20260805", status: str = "RESERVE") -> HistoryRow:
+    return HistoryRow(invt_seq=seq, car_number="12가4567", invitation_date=date,
+                      status=status, park_name="예시동 샘플아파트[출입통제A]")
+
+
+def test_cancelled_rows_are_not_registered_vehicles():
+    """**The measurement that mattered.** 취소 does not delete a row, it flips `inot_status` and
+    the row keeps its `invt_seq` — so a day of testing leaves a list that is mostly `CANCEL`. On
+    the maintainer's own account this shape counted 6 where the honest answer was 1, and a
+    plausible-looking number on a tile is not something a user can catch."""
+    rows = [_row(n, status="CANCEL") for n in range(1, 6)] + [_row(6)]
+
+    assert count_registered_on(rows, "20260805") == 1
+
+
+@pytest.mark.parametrize("status", ["RESERVE", "IN", "OUT"])
+def test_every_active_status_is_a_registered_vehicle(status):
+    """A car that has already entered or left was still registered that day. This is
+    `const.ACTIVE_STATUSES`, reused rather than re-spelled, so the count cannot drift from the
+    predicate the register path's recovery re-query trusts."""
+    assert count_registered_on([_row(1, status=status)], "20260805") == 1
+
+
+def test_rows_from_other_days_are_not_counted():
+    """The date is checked here as well as requested, for the same reason `_recover_register`
+    re-checks the plate the server was asked to filter on: the vendor's filtering rules were never
+    characterised, and a bare number on a tile cannot reveal that it covered three months."""
+    rows = [_row(1), _row(2, date="20260601"), _row(3, date="20260806")]
+
+    assert count_registered_on(rows, "20260805") == 1
+
+
+def test_a_malformed_date_cannot_raise_the_count():
+    """`invitation_date` is the wire format `yyyyMMdd`, so this is a string comparison. A row the
+    vendor sends malformed is data we do not get to reject, and it must not empty the tile."""
+    rows = [_row(1), _row(2, date=""), _row(3, date="not-a-date")]
+
+    assert count_registered_on(rows, "20260805") == 1
+
+
+def test_an_empty_day_counts_zero_rather_than_failing():
+    """Zero is a real answer — a day with no visitors — and the commonest one."""
+    assert count_registered_on([], "20260805") == 0
+
+
 def test_aggregate_counts_stay_empty_because_the_server_sends_empty(make_api):
     """`resultData.total` was `[]` even on a 43-record range — verified twice. It is
-    optional display metadata, never a status aggregate, and there is deliberately no
-    counting logic anywhere in this app."""
+    optional display metadata, never a status aggregate — which is why the 오늘 등록 count is
+    derived from the rows by `count_registered_on` and never from this field."""
     assert IparkingApi.aggregate_counts(history_ok((("12가4567", "20260805", "IN"),))) == []
     assert IparkingApi.aggregate_counts(
         history_ok((), total=({"inot_status": "IN", "cnt": 2},))

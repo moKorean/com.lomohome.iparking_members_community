@@ -17,9 +17,10 @@ opaque white background, per Homey's driver-image guideline, rasterized straight
 from docs/device-image-<driver>.svg with `rsvg-convert` (which honours the exact
 pixel size, so there is no resize step and no intermediate PNG to keep in sync).
 
-assets/icon.svg, assets/capabilities/parking.svg and drivers/*/assets/icon.svg
+assets/icon.svg, assets/capabilities/visitcar.svg and drivers/*/assets/icon.svg
 are maintained by hand — this script deliberately does NOT touch them, so it
-can't overwrite hand-drawn artwork.
+can't overwrite hand-drawn artwork. (`parking.svg` went with the 주차장명
+capability it was the icon for.)
 """
 
 import subprocess

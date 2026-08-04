@@ -246,6 +246,32 @@ class HistoryRow:
         return self.status in ACTIVE_STATUSES
 
 
+def count_registered_on(rows, api_date: str) -> int:
+    """How many of `rows` are **registered vehicles for `api_date`** — the 오늘 등록 count.
+
+    Two filters, and both are load-bearing:
+
+    * **`is_active`**, i.e. `const.ACTIVE_STATUSES` — the same predicate the register path's
+      recovery re-query uses, reusing that set rather than spelling it a second time. 취소 does
+      not delete a row, it flips `inot_status` and the row stays, so a day's rows are frequently
+      mostly `CANCEL`: on the maintainer's own account, counting them showed **6** where the
+      honest answer was **1**.
+    * **the date**, checked client-side even though the request already asks for a one-day
+      window. Same reasoning as `_recover_register` re-checking the plate the server was asked
+      to filter on: the vendor's filtering rules were never characterised, and a count is a bare
+      number on a tile — nothing about it would reveal that it had quietly covered three months.
+
+    `invitation_date` is the wire format `yyyyMMdd`, exactly what `dates.today_api()` returns, so
+    this is a string comparison that cannot raise on a row the vendor sent malformed.
+
+    Lives here, in the `homey`-free client, so the counting rule is unit-testable and has one
+    home. It is the only counting logic in the app — `aggregate_counts` below is the vendor's own
+    aggregate, which is empty in practice and is not it.
+    """
+    wanted = str(api_date)
+    return sum(1 for row in rows if row.is_active and str(row.invitation_date) == wanted)
+
+
 # --- the client -------------------------------------------------------------
 
 
@@ -671,8 +697,8 @@ class IparkingApi:
 
         It came back `[]` even on a range holding 43 records — verified twice — so it is
         never a status aggregate. Render a row if it is ever non-empty; per-row
-        `inot_status` is the authoritative source. There is deliberately no counting logic
-        anywhere in this app.
+        `inot_status` is the authoritative source, which is why the 오늘 등록 count is derived
+        by `count_registered_on` from the rows themselves and never from this field.
         """
         data = envelope.get("resultData")
         total = data.get("total") if isinstance(data, dict) else None

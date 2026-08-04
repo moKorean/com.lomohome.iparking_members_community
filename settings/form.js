@@ -101,6 +101,8 @@
       registerBtn: "등록",
       registering: "등록 중…",
       registerOk: "✓ 등록되었습니다 · {plate} · 방문 예정일 {date}",
+      toastRegistered: "{plate} 차량이 오늘 방문 등록되었습니다.",
+      toastRegisteredOn: "{plate} 차량이 {date} 방문 등록되었습니다.",
       dateAmbiguous: "입력하신 날짜를 {date} 로 해석했습니다. 의도한 날짜가 아니면 취소하고 다시 등록하세요.",
       alreadyRegistered: "이미 등록된 차량입니다. 아래 등록 내역 또는 아이파킹 사이트에서 확인하세요.",
       uncertainHeading: "등록 결과를 확인할 수 없습니다",
@@ -167,6 +169,8 @@
       registerBtn: "Register",
       registering: "Registering…",
       registerOk: "✓ Registered · {plate} · visit date {date}",
+      toastRegistered: "{plate} is registered to visit today.",
+      toastRegisteredOn: "{plate} is registered to visit on {date}.",
       dateAmbiguous: "Your date was read as {date}. If that is not the day you meant, cancel it and register again.",
       alreadyRegistered: "This vehicle is already registered. Check the history table below or the iParking site to confirm.",
       uncertainHeading: "The registration outcome is unconfirmed",
@@ -393,6 +397,34 @@
       };
     }
     return { state: "error", retryable: true, outcome: outcome };
+  }
+
+  /**
+   * The toast text for a register verdict, or `""` when this outcome must not get one.
+   *
+   * **Only `ok` earns a toast.** `already` and `uncertain` keep the distinct wording they
+   * already have in the message area, and flattening either into a success toast would be a
+   * lie with consequences: `already` means the vehicle was registered before this click, and
+   * `uncertain` means nobody knows whether it is registered at all.
+   *
+   * **"오늘" is checked, not assumed.** The handler's `api_date` is compared against
+   * `/status`'s `today_kst` — both server-side KST values, so `new Date()` stays uninvolved
+   * (rule 4) — and a future visit date is named instead of being called today. The maintainer
+   * asked for the 오늘 wording because a *tile press* is always today; this page can register
+   * any date in the window, and a toast reading 오늘 for next Tuesday would be exactly the
+   * silent wrong-day error the date echo exists to prevent.
+   */
+  function registerToast(verdict, status, lang) {
+    if (!verdict || verdict.state !== "ok") return "";
+    var res = verdict.response || {};
+    var plate = res.car_number || "";
+    if (!plate) return "";
+    var apiDate = typeof res.api_date === "string" ? res.api_date : "";
+    var today = String((status && status.today_kst) || "").replace(/-/g, "");
+    if (apiDate && today && apiDate === today) {
+      return t(lang, "toastRegistered", { plate: plate });
+    }
+    return t(lang, "toastRegisteredOn", { plate: plate, date: res.date || apiDate });
   }
 
   /**
@@ -702,6 +734,8 @@
       pageRows: pageRows,
       setPage: setPage,
       dateBounds: function () { return dateBounds(state.status); },
+      /** The success-toast text for a verdict, `""` for every other outcome. */
+      toast: function (verdict) { return registerToast(verdict, state.status, state.lang); },
       t: function (key, params) { return t(state.lang, key, params); },
       statusLabel: function (status) { return statusLabel(state.lang, status); },
       describe: function (err) { return describe(err, state.lang); },
@@ -723,6 +757,7 @@
     messageOf: messageOf,
     registerPermission: registerPermission,
     classifyRegister: classifyRegister,
+    registerToast: registerToast,
     rowIsCancellable: rowIsCancellable,
     paginate: paginate,
     dateBounds: dateBounds,
