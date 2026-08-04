@@ -1,0 +1,100 @@
+{
+  "id": "com.lomohome.iparking_members_community",
+  "version": "0.1.0",
+  "compatibility": ">=13.0.0",
+  "sdk": 3,
+  "runtime": "python",
+  "pythonVersion": "3.14",
+  "pythonPackages": [
+    "certifi>=2024.0.0"
+  ],
+  "platforms": [
+    "local"
+  ],
+  "brandColor": "#1B4F72",
+  "name": {
+    "en": "iParking Visitor Parking",
+    "ko": "아이파킹 방문차량"
+  },
+  "description": {
+    "en": "Register and manage visitor parking at your apartment complex",
+    "ko": "아파트 단지 방문 차량을 등록하고 관리하세요"
+  },
+  "category": [
+    "security"
+  ],
+  "tags": {
+    "en": [
+      "iParking",
+      "visitor parking",
+      "parking",
+      "access control",
+      "apartment"
+    ],
+    "ko": [
+      "아이파킹",
+      "방문차량",
+      "주차",
+      "출입통제",
+      "아파트"
+    ]
+  },
+  "permissions": [],
+  "api": {
+    "get_status": {
+      "method": "GET",
+      "path": "/status"
+    },
+    "save_credentials": {
+      "method": "POST",
+      "path": "/credentials"
+    },
+    "clear_credentials": {
+      "method": "POST",
+      "path": "/credentials-clear"
+    },
+    "diagnostics": {
+      "method": "GET",
+      "path": "/diagnostics"
+    },
+    "check_connection": {
+      "method": "GET",
+      "path": "/check-connection"
+    },
+    "set_language": {
+      "method": "POST",
+      "path": "/language"
+    },
+    "get_lots": {
+      "method": "GET",
+      "path": "/lots"
+    },
+    "register_visitor": {
+      "method": "POST",
+      "path": "/register"
+    },
+    "get_history": {
+      "method": "GET",
+      "path": "/history"
+    },
+    "cancel_visitor": {
+      "method": "POST",
+      "path": "/cancel"
+    }
+  },
+  "images": {
+    "small": "/assets/images/small.png",
+    "large": "/assets/images/large.png",
+    "xlarge": "/assets/images/xlarge.png"
+  },
+  "author": {
+    "name": "Geunwon Mo",
+    "email": "mokorean@gmail.com"
+  },
+  "copyright": "© 2026 Geunwon Mo",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/moKorean/com.lomohome.iparking_members_community/issues"
+  },
+  "source": "https://github.com/moKorean/com.lomohome.iparking_members_community"
+}

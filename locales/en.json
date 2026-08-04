@@ -1,0 +1,32 @@
+{
+  "error": {
+    "success": "Success.",
+    "fail": "The request failed.",
+    "db_error": "The server reported a temporary error. Try again in a moment.",
+    "session_exit": "Your session expired. Signing in again…",
+    "no_id": "Enter an account ID.",
+    "login_error": "Sign-in failed. Check your iParking ID and password.",
+    "token_not_find": "Your access token was not found. Signing in again is required.",
+    "token_user_not_find": "No account matches this access token. Signing in again is required.",
+    "password_error": "The password is incorrect.",
+    "not_find_store": "No enrolled building was found on this account.",
+    "not_allowed": "This account is not allowed to do that.",
+    "already_deleted": "This registration was already canceled.",
+    "cannot_delete": "This registration cannot be canceled right now.",
+    "unknown": "An unknown error occurred (code {code})."
+  },
+  "already_registered": "This vehicle is already registered. Check the history table below or the iParking site to confirm.",
+  "register_failed": "Vehicle registration failed. You can try again.",
+  "need_credentials": "No iParking account is set up. Open the app settings and sign in.",
+  "not_permitted": "This account is not permitted to register visitor vehicles. Contact your building office.",
+  "no_stores": "This account has no registered parking store. Contact your building office.",
+  "bad_plate": "That doesn't look like a valid plate number. e.g. 12가1234, 임1234, 임123456, 외교123456",
+  "register_uncertain": "The registration outcome could not be confirmed — it may have succeeded or it may not have. Do not try again. Open the iParking website's visitor-vehicle history and check whether this plate is listed before doing anything else.",
+  "past_date": "The visit date must be today or later.",
+  "bad_date": "That visit date could not be read. Use yyyy-mm-dd or dd-mm-yyyy.",
+  "date_too_far": "The visit date must be within {days} days from today.",
+  "date_resolved": "Registered for {date}.",
+  "date_ambiguous": "Your date was read as {date}. If that is not the day you meant, cancel it and register again.",
+  "write_budget": "Too many register/cancel requests in the last hour. Try again later.",
+  "cleartext_notice": "Unofficial client for iParking MEMBERS. Sign-in itself goes over verified HTTPS, but iParking's own API server downgrades every HTTPS request it receives to plain HTTP — that is the vendor server's behavior and cannot be fixed from this app. As a result, the access token and your plate/visit data travel over the network unencrypted after sign-in. Registering a visitor vehicle here acts on this building's real access-control system."
+}

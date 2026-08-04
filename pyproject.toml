@@ -1,0 +1,38 @@
+[project]
+name = "com-lomohome-iparking-members-community"
+version = "0.1.0"
+description = "Homey app for iParking MEMBERS visitor parking (방문 차량 관리)"
+requires-python = ">=3.14"
+# The runtime source of truth for dependencies is app.json's `pythonPackages`.
+# This mirror exists for local development and tests.
+dependencies = [
+    "certifi>=2024.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+# This is a Homey app, not a Python distribution — there is nothing to build or
+# install. Declaring an empty package stops setuptools from auto-discovering the
+# top-level app dirs (iparking_lib/, drivers/, assets/, …) and failing an editable
+# install with "Multiple top-level packages discovered in a flat-layout".
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = []
+py-modules = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

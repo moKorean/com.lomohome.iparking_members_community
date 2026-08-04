@@ -1,0 +1,34 @@
+.homeybuild/
+env.json
+.env
+*.log
+.DS_Store
+
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+uv.lock
+
+# Built per-architecture venvs. `homey app build` regenerates these from
+# app.json's `pythonPackages` using the official builder images, so they are
+# reproducible rather than source.
+/python_packages/*/
+
+# Never commit account or cloud credentials.
+*.pem
+*.key
+certs/
+
+# Probe state — a manual recovery handle for the live-write probe (item 3), not
+# a fixture. Must never be committed: it can carry a real invt_seq to clean up.
+scripts/probe-state.json
+
+# OMC operational artifacts (plans, state, logs).
+.omc/

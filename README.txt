@@ -1,0 +1,7 @@
+For residents of a building that uses iParking: register parking for visitors coming to your own home, through iParking MEMBERS. This is an unofficial, community-built app and is not affiliated with iParking.
+
+Personal use only. Using it requires your own unit's account at a building enrolled in iParking MEMBERS, and an account can only register visitors coming to that unit. Sign in with your own credentials and register only vehicles visiting you.
+
+Sign in once in the app settings to see your parking lot's name as a sensor. From the settings page — the app's main screen — pick a lot, enter a plate number and a visit date, and register a visitor; whitespace in the plate is stripped automatically. Review and cancel past registrations from the same page, or register from a Flow action. Re-registering an already-registered plate is reported as its own outcome rather than an error, and if a registration's result cannot be confirmed the app tells you to check the iParking website directly instead of guessing or retrying.
+
+iParking's own API server redirects every secure request to a plain connection, so the access token and plate data travel unencrypted after sign-in — this is the vendor server's behavior and cannot be changed from this app. Sign-in itself uses a verified secure connection. Credentials are stored only on your own device. Registering a vehicle here acts on your building's real access-control system.

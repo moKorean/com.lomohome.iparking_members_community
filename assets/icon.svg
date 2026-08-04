@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 960" width="960" height="960">
+  <!-- App icon: a visitor-parking access barrier raised for a car, on the app's
+       brandColor. Built from plain shapes (no <text>/no external font
+       dependency) so it renders identically everywhere Homey displays it. -->
+  <rect x="60" y="60" width="840" height="840" rx="160" fill="#1B4F72"/>
+
+  <!-- gate posts -->
+  <rect x="300" y="340" width="56" height="330" rx="16" fill="#FFFFFF"/>
+  <rect x="604" y="340" width="56" height="330" rx="16" fill="#FFFFFF"/>
+
+  <!-- barrier arm, raised (access granted) -->
+  <g transform="rotate(-26 328 360)">
+    <rect x="328" y="336" width="436" height="46" rx="23" fill="#FFFFFF"/>
+    <rect x="368" y="336" width="38" height="46" fill="#D64545"/>
+    <rect x="452" y="336" width="38" height="46" fill="#D64545"/>
+    <rect x="536" y="336" width="38" height="46" fill="#D64545"/>
+    <rect x="620" y="336" width="38" height="46" fill="#D64545"/>
+    <rect x="704" y="336" width="38" height="46" fill="#D64545"/>
+  </g>
+
+  <!-- car passing through -->
+  <g>
+    <path d="M468 560 q28 -66 88 -66 h48 q60 0 88 66 z" fill="#FFFFFF"/>
+    <rect x="424" y="558" width="304" height="104" rx="30" fill="#F2F2F5"/>
+    <rect x="500" y="580" width="152" height="34" rx="8" fill="#1B4F72"/>
+    <circle cx="478" cy="666" r="34" fill="#1B4F72"/>
+    <circle cx="478" cy="666" r="12" fill="#F2F2F5"/>
+    <circle cx="674" cy="666" r="34" fill="#1B4F72"/>
+    <circle cx="674" cy="666" r="12" fill="#F2F2F5"/>
+  </g>
+</svg>

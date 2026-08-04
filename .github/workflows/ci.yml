@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The personal-data scan reads every blob reachable from any ref, so it
+          # needs the whole history, not the default shallow clone.
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          # No lockfile is committed (uv.lock is gitignored), so there is nothing
+          # to key a cache on; disabling it avoids the "cache never invalidates" warning.
+          enable-cache: false
+      - name: Set up Python 3.14
+        run: uv python install 3.14
+      - name: Create venv and install
+        run: |
+          uv venv --python 3.14
+          uv pip install -e ".[dev]"
+      - name: Lint
+        run: uv run ruff check .
+      - name: Test
+        run: uv run pytest -q
+      # This app is developed against one real account at one real building, so real
+      # values — a unit number, the building name, neighbours' plate numbers — are
+      # always within reach and have reached a commit once already. Reviewing by hand
+      # does not catch it; this does. It scans history too, because editing a file
+      # does not remove what an earlier commit recorded.
+      - name: No personal data in the repo or its history
+        run: python3 scripts/check_no_personal_data.py
+      # Criterion: the pure client must stay importable without the Homey runtime, so
+      # it can be unit-tested off-device. A well-meaning docstring is what reintroduces
+      # this, which is why it is a gate and not a convention.
+      - name: Pure client has no Homey runtime dependency
+        run: |
+          if grep -rn 'import homey' iparking_lib/iparking/; then
+            echo "::error::iparking_lib/iparking/ must not depend on the Homey runtime"
+            exit 1
+          fi
+          echo "OK - pure client is runtime-independent"

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="1000" height="700">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B4F72"/>
+      <stop offset="1" stop-color="#123249"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="700" fill="url(#bg)"/>
+
+  <!-- soft glow -->
+  <circle cx="820" cy="120" r="260" fill="#FFFFFF" opacity="0.05"/>
+
+  <!-- ground / road -->
+  <polygon points="0,560 1000,560 1000,700 0,700" fill="#dfe3ea"/>
+  <polygon points="0,560 1000,560 940,540 60,540" fill="#c9ced9"/>
+  <rect x="120" y="600" width="90" height="14" rx="7" fill="#FFFFFF" opacity="0.8"/>
+  <rect x="330" y="600" width="90" height="14" rx="7" fill="#FFFFFF" opacity="0.8"/>
+  <rect x="800" y="600" width="90" height="14" rx="7" fill="#FFFFFF" opacity="0.8"/>
+
+  <!-- gate posts -->
+  <rect x="430" y="330" width="44" height="240" rx="12" fill="#FFFFFF"/>
+  <rect x="700" y="330" width="44" height="240" rx="12" fill="#FFFFFF"/>
+
+  <!-- barrier arm, raised -->
+  <g transform="rotate(-24 452 344)">
+    <rect x="452" y="326" width="330" height="34" rx="17" fill="#FFFFFF"/>
+    <rect x="484" y="326" width="28" height="34" fill="#D64545"/>
+    <rect x="548" y="326" width="28" height="34" fill="#D64545"/>
+    <rect x="612" y="326" width="28" height="34" fill="#D64545"/>
+    <rect x="676" y="326" width="28" height="34" fill="#D64545"/>
+    <rect x="740" y="326" width="28" height="34" fill="#D64545"/>
+  </g>
+
+  <!-- car -->
+  <g>
+    <path d="M545 470 q22 -52 70 -52 h38 q48 0 70 52 z" fill="#FFFFFF"/>
+    <rect x="510" y="468" width="250" height="84" rx="24" fill="#F2F2F5"/>
+    <rect x="568" y="486" width="126" height="28" rx="7" fill="#1B4F72"/>
+    <circle cx="558" cy="556" r="28" fill="#1B4F72"/>
+    <circle cx="558" cy="556" r="10" fill="#F2F2F5"/>
+    <circle cx="716" cy="556" r="28" fill="#1B4F72"/>
+    <circle cx="716" cy="556" r="10" fill="#F2F2F5"/>
+  </g>
+
+  <!-- brand "P" badge, upper-left -->
+  <g>
+    <circle cx="140" cy="150" r="86" fill="#FFFFFF"/>
+    <path d="M112 190V110h34a26 26 0 0 1 0 52h-34" fill="none" stroke="#1B4F72" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
