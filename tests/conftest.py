@@ -173,6 +173,11 @@ class StubHandler(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
                        for url, v in routes.items()}
         self.calls = []          # (method, url, headers, body)
         self.timeouts = []
+        # Every retry backoff the transport asked for, in order. Lives on the handler rather
+        # than in its own fixture so `make_api`'s return tuple stays three-wide and the
+        # existing tests keep working; `make_api` wires `Transport(sleep=...)` to it, so a
+        # retry test asserts the backoff happened without the suite really waiting for it.
+        self.backoffs = []
 
     def http_open(self, req):
         self.calls.append((req.get_method(), req.full_url, dict(req.header_items()), req.data))
@@ -246,7 +251,9 @@ def make_api():
             username=username,
             password=password,
             log=logs.append,
-            transport=Transport(log=logs.append, handlers=[stub]),
+            transport=Transport(
+                log=logs.append, handlers=[stub], sleep=stub.backoffs.append
+            ),
             **kwargs,
         )
         return api, stub, logs

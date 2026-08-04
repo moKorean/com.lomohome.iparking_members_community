@@ -22,6 +22,7 @@ POST genuinely is still in flight when the budget fires.
 from __future__ import annotations
 
 import asyncio
+import http.client
 import time
 import urllib.error
 from datetime import timedelta
@@ -41,7 +42,12 @@ from conftest import (
     slow,
 )
 
-from iparking_lib.const import MAX_WRITES_PER_HOUR, RECOVERY_SLEEP_S
+from iparking_lib.const import (
+    MAX_WRITES_PER_HOUR,
+    READ_ATTEMPTS,
+    RECOVERY_ATTEMPTS,
+    RECOVERY_SLEEP_S,
+)
 from iparking_lib.iparking import client as client_module
 from iparking_lib.iparking import crypto, dates
 from iparking_lib.iparking.client import (
@@ -161,6 +167,56 @@ def test_an_expired_token_on_the_write_does_not_resend_it(make_api, no_sleep):
         register(api)
 
     assert stub.count(REGISTER_URL) == 1, "an expired token must not re-send the write"
+
+
+def test_a_connection_reset_on_the_write_is_never_retried(make_api, no_sleep):
+    """The invariant this whole task had to leave intact. **Exactly one POST.**
+
+    The members host resets ~30 % of plain-HTTP connections, so everything else in this app
+    now retries — reads four times, the recovery five. This endpoint retries **zero** times,
+    and the reason is that a reset here is *not* the same fact it is on a read. On a read it
+    means "ask again". Here it cannot distinguish:
+
+      * the request never arrived, and nothing is registered; from
+      * the request arrived, the server registered the vehicle, and the reply died with the
+        socket.
+
+    A second POST resolves nothing and risks registering a visitor vehicle **twice at a real
+    building**. The answer is the read below, never a second write.
+
+    If this test ever fails, the fix is the code, never this assertion.
+    """
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        # Always resets. If the write retried at all, `count` would exceed 1.
+        REGISTER_URL: ConnectionResetError(54, "Connection reset by peer"),
+        HISTORY_URL: history_ok(((PLATE, DATE, "RESERVE"),)),
+    })
+
+    assert register(api) == "already_registered"
+    assert stub.count(REGISTER_URL) == 1, "ZERO retries on POST /invitations. Ever."
+    assert stub.count(HISTORY_URL) == 1, "the answer is a read"
+
+
+def test_a_truncated_read_on_the_write_reaches_the_recovery_instead_of_escaping(
+    make_api, no_sleep
+):
+    """`IncompleteRead` is how the hub reports the same reset — and it used to escape.
+
+    It subclasses `http.client.HTTPException`, not `OSError`, so it passed straight through
+    the transport's `except` clause *and* `_attempt_register`'s handlers. That is the measured
+    failure: the register path logged three request lines and then nothing at all — no error,
+    no traceback, and no recovery re-query either, so a resolvable outcome became a bare error.
+    """
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: http.client.IncompleteRead(b"p" * 255, 100),
+        HISTORY_URL: history_ok(((PLATE, DATE, "RESERVE"),)),
+    })
+
+    assert register(api) == "already_registered", "the outcome is knowable, and now known"
+    assert stub.count(REGISTER_URL) == 1
+    assert stub.count(HISTORY_URL) == 1
 
 
 def test_a_refused_redirect_on_the_write_is_never_retried(make_api, no_sleep):
@@ -461,6 +517,116 @@ def test_a_failed_recovery_query_is_uncertain_not_a_failure(make_api, no_sleep):
 
     with pytest.raises(RegisterUncertain):
         register(api)
+
+
+# --- the recovery re-query: the line that turned a knowable outcome into an error ---
+#
+# On 2026-08-04 the live failure was three faults in one session: the write hit a reset, the
+# recovery re-query hit another reset, and the user got a bare error. The write is not allowed
+# to retry, so the re-query is the *only* thing standing between a reset and "we cannot tell
+# you whether your car is registered". It is therefore the one call in the app that tries
+# hardest — `RECOVERY_ATTEMPTS`, one more than an ordinary read.
+
+
+def test_the_recovery_re_query_retries_a_reset_and_then_answers(make_api, no_sleep):
+    """The highest-value behaviour in this task, stated as one assertion.
+
+    Two resets on the re-query, then the truth: the write **had** landed. Without the retry
+    this is a `RegisterUncertain` — the user is told the outcome is unknown and sent to the
+    vendor's website, for a car that is in fact registered.
+    """
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: ConnectionResetError(54, "reset"),
+        HISTORY_URL: [
+            ConnectionResetError(54, "reset"),
+            ConnectionResetError(54, "reset"),
+            history_ok(((PLATE, DATE, "RESERVE"),)),
+        ],
+    })
+
+    assert register(api) == "already_registered"
+    assert stub.count(REGISTER_URL) == 1, "the write still never retries"
+    assert stub.count(HISTORY_URL) == 3, "the read retried until it got an answer"
+
+
+def test_the_recovery_re_query_tries_harder_than_an_ordinary_read(make_api, no_sleep):
+    """Its attempt count is `RECOVERY_ATTEMPTS`, not `READ_ATTEMPTS`.
+
+    Asserted as the number of requests actually sent rather than by reading the constant back,
+    so wiring the recovery to the ordinary read default would fail this test.
+    """
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: ConnectionResetError(54, "reset"),
+        HISTORY_URL: [ConnectionResetError(54, "reset")] * (READ_ATTEMPTS)
+        + [history_ok(((PLATE, DATE, "RESERVE"),))],
+    })
+
+    assert register(api) == "already_registered", (
+        "the recovery must survive more resets than an ordinary read does"
+    )
+    assert stub.count(HISTORY_URL) == READ_ATTEMPTS + 1
+    assert RECOVERY_ATTEMPTS > READ_ATTEMPTS
+
+
+def test_the_recovery_gives_up_after_its_cap_and_reports_uncertain(make_api, no_sleep):
+    """Give-up raises `RegisterUncertain` — never `register_failed`, which invites a retry."""
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: ConnectionResetError(54, "reset"),
+        HISTORY_URL: ConnectionResetError(54, "reset"),
+    })
+
+    with pytest.raises(RegisterUncertain):
+        register(api)
+
+    assert stub.count(HISTORY_URL) == RECOVERY_ATTEMPTS, "exactly the cap, not one more"
+    assert stub.count(REGISTER_URL) == 1
+
+
+def test_the_recovery_giving_up_is_logged_with_the_exception_type(make_api, no_sleep):
+    """The logging defect, independent of the retries.
+
+    The app logged three request lines and then **nothing** — no error, no traceback — so the
+    maintainer could not see why a registration had failed. A recovery that gives up is the
+    most consequential thing this app does; it must leave a readable trace.
+    """
+    api, _stub, logs = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: ConnectionResetError(54, "reset"),
+        HISTORY_URL: ConnectionResetError(54, "reset"),
+    })
+
+    with pytest.raises(RegisterUncertain):
+        register(api)
+
+    joined = "\n".join(logs)
+    assert "ConnectionResetError" in joined, "the exception type must be named"
+    assert "recovery re-query failed" in joined
+    assert f"{RECOVERY_ATTEMPTS} attempt(s)" in joined
+    # And the redaction rules still hold on the way out.
+    assert PLATE not in joined
+    assert "999동9999호" not in joined
+
+
+def test_the_live_failure_of_2026_08_04_now_resolves_to_an_answer(make_api, no_sleep):
+    """The measured session, replayed: a reset on the write **and** on the first re-query.
+
+    Before the retries this produced a bare error for the user and no log line explaining it.
+    The write still sends exactly once — that part was never the bug — while the re-query now
+    survives its own reset and reports what actually happened.
+    """
+    api, stub, logs = make_api({
+        OAUTH_URL: login_ok(),
+        REGISTER_URL: http.client.IncompleteRead(b"p" * 255, 100),
+        HISTORY_URL: [ConnectionResetError(54, "reset"), history_ok(((PLATE, DATE, "IN"),))],
+    })
+
+    assert register(api) == "already_registered"
+    assert stub.count(REGISTER_URL) == 1
+    assert stub.count(HISTORY_URL) == 2
+    assert "IncompleteRead" in "\n".join(logs), "and the cause is now visible in the log"
 
 
 # --- the per-car verdicts ----------------------------------------------------

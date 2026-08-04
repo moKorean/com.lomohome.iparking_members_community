@@ -20,10 +20,30 @@ cancel vehicles at a real building, and it crosses the wire in cleartext. It liv
 object and is never handed to `homey.settings`, so it cannot reach a hub backup or a
 settings export. Nothing here logs its value — presence and length only.
 
-**3. `register()` never retries.** Everything about that method is shaped by one failure:
-a vehicle actually registered at a real building after the user was told it failed. See its
-docstring. If you are here to "add a retry for reliability", read it first; the retry is
-the failure, not the fix.
+**3. `register()` never retries — and everything else does.** Everything about that method is
+shaped by one failure: a vehicle actually registered at a real building after the user was
+told it failed. See its docstring. If you are here to "add a retry for reliability", read it
+first; on that endpoint the retry is the failure, not the fix.
+
+Everywhere else the retry *is* the fix, because the members host resets roughly **30 %** of
+plain-HTTP connections (measured; `docs/RECON.md`). So every call to `transport.request` in
+this file names its `attempts=` explicitly, and the number is chosen **per endpoint by
+semantics, never per HTTP method** — this API serves reads over POST, so a method-shaped rule
+would retry the register. The policy, in one place:
+
+| Endpoint | Attempts | Why |
+|---|---|---|
+| oauth login | `LOGIN_ATTEMPTS` | a retry just mints another token |
+| `POST /invitations/list` | `READ_ATTEMPTS` | read |
+| `POST /parkinglot/list/{seq}` | `READ_ATTEMPTS` | read |
+| `GET /invitations/{seq}` | `READ_ATTEMPTS` | read |
+| `DELETE /invitations/{seq}` | `READ_ATTEMPTS` | idempotent — re-cancelling gives `13001` |
+| recovery re-query | `RECOVERY_ATTEMPTS` | it resolves the uncertainty (3) creates |
+| **`POST /invitations`** | **1** | a reset cannot tell "never arrived" from "arrived, reply lost" |
+
+And a **timeout is not a reset**: `transport.ConnectionLost` is retryable because the socket
+is gone and nothing is in flight, while a timeout means the request may still land. Widening
+one into the other is what would make the write retryable by accident.
 
 ## Never logged
 
@@ -36,6 +56,7 @@ this data to a log line.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import time
 import urllib.parse
@@ -48,11 +69,14 @@ from iparking_lib.const import (
     CLIENT_OS_TYPE,
     HISTORY_DAYS_BACK,
     HISTORY_PAGE_SIZE,
+    LOGIN_ATTEMPTS,
     MAX_WRITES_PER_HOUR,
     MEMBERS_BASE_PATH,
     MEMBERS_HOST,
     OAUTH_HOST,
     OAUTH_PATH,
+    READ_ATTEMPTS,
+    RECOVERY_ATTEMPTS,
     RECOVERY_SLEEP_S,
     RECOVERY_TIMEOUT_S,
     REGISTER_TIMEOUT_S,
@@ -350,8 +374,12 @@ class IparkingApi:
             "client_os_type": CLIENT_OS_TYPE,
         }
         url = self._oauth_url()
+        # Retryable. A retried login mints another token and there is nothing to double —
+        # the only cost is invalidating the token the failed attempt never gave us. Note
+        # this is a POST that is *safe* to retry while `POST /invitations` is not, which is
+        # why the policy is per endpoint and never per method.
         response = await self._run(self.transport.request, "POST", url, self._headers(),
-                                   crypto.encode_body(body))
+                                   crypto.encode_body(body), attempts=LOGIN_ATTEMPTS)
         self._require_scheme(response, OAUTH_HOST)
         envelope = self._envelope(response.text)
         code = codes.normalize_code(envelope.get("result"))
@@ -475,10 +503,22 @@ class IparkingApi:
             return {}
         return data if isinstance(data, dict) else {}
 
-    async def _run(self, fn, *args):
-        return await asyncio.get_running_loop().run_in_executor(None, fn, *args)
+    async def _run(self, fn, *args, **kwargs):
+        """Run a blocking call on the default executor.
 
-    async def _authed(self, method: str, path: str, payload: object = None) -> dict:
+        `functools.partial` rather than `run_in_executor(None, fn, *args)` because
+        `run_in_executor` takes no keyword arguments, and every `transport.request` call in
+        this file names its `attempts=` explicitly. That is not style: the retry policy is
+        the difference between a read and a write here, and a bare positional integer buried
+        in a five-argument call is exactly how one would end up on the wrong endpoint.
+        """
+        call = functools.partial(fn, *args, **kwargs)
+        return await asyncio.get_running_loop().run_in_executor(None, call)
+
+    async def _authed(
+        self, method: str, path: str, payload: object = None, *,
+        attempts: int = READ_ATTEMPTS,
+    ) -> dict:
         """A `/api/members/*` call with **exactly one** re-login retry.
 
         The retry covers `2031`/`2041`/`1009` only — the codes a fresh token actually fixes.
@@ -487,6 +527,12 @@ class IparkingApi:
         **`register()` does not use this method**, and that is deliberate rather than an
         oversight: one retry of a read is free, while one retry of `POST /invitations` is a
         second vehicle registered at a building.
+
+        That is also why `attempts` can default to `READ_ATTEMPTS` here without qualification:
+        **every endpoint routed through this method is replay-safe**, and the one that is not
+        does not come through here at all. The two distinct retries stack — up to `attempts`
+        transport tries per re-login, twice — which is why the budgets in `const.py` carry
+        slack rather than being sized to the mean.
         """
         self._refuse_if_disabled()
         await self.ensure_session()
@@ -497,6 +543,7 @@ class IparkingApi:
             response = await self._run(
                 self.transport.request, method, self._members_url(path), self._headers(),
                 None if payload is None else crypto.encode_body(payload),
+                attempts=attempts,
             )
             self._require_scheme(response, self.api_host)
             envelope = self._envelope(response.text)
@@ -562,8 +609,13 @@ class IparkingApi:
         end_date: str | None = None,
         car_number: str = "",
         page_size: int = HISTORY_PAGE_SIZE,
+        attempts: int = READ_ATTEMPTS,
     ) -> list[HistoryRow]:
         """등록 내역 rows for a window, newest-first as the server returns them.
+
+        `attempts` is exposed only so the register path's recovery re-query can raise it to
+        `RECOVERY_ATTEMPTS` — see `_recover_register`. Ordinary callers (the settings table,
+        the device poll) take the read default; a dropped history refresh costs a redraw.
 
         A non-empty `carNumber` **does** narrow the result server-side — verified live
         2026-08-04, 43 rows down to 19 for one plate — which is what makes the register
@@ -586,7 +638,7 @@ class IparkingApi:
             # `page_size` is honoured verbatim, so one request covers the whole window.
             "page_size": int(page_size),
         }
-        envelope = await self._authed("POST", "/invitations/list", payload)
+        envelope = await self._authed("POST", "/invitations/list", payload, attempts=attempts)
         return self._parse_history(envelope)
 
     @staticmethod
@@ -644,6 +696,21 @@ class IparkingApi:
         Production code rather than test scaffolding: the settings page's per-row 취소 needs
         it anyway, which is what let the probe prove its own cleanup path with shipping code
         instead of a throwaway script.
+
+        ## This one **may** retry, unlike `register`. Do not "fix" that into a non-retry.
+
+        A cancel is **idempotent at the server**, which is measured rather than assumed:
+        deleting an already-cancelled row returns `13001 alreadyDeleted` (verified live
+        2026-08-04), and that is a no-op on a row that is already `CANCEL`. So the outcome a
+        reset leaves ambiguous — "did the first DELETE land?" — has the *same end state*
+        either way, and a second attempt cannot cancel a second thing.
+        `POST /invitations` has no such property: its ambiguity is one registration versus
+        two, at a real building. The asymmetry is the whole reason retry policy is decided per
+        endpoint here, so leaving this at `READ_ATTEMPTS` is deliberate.
+
+        (`13001` still surfaces as an `IparkingApiError` rather than being swallowed — a
+        cancel of a row the user believes is active is worth reporting. It is only the
+        *retry* that is safe, not the code that is meaningless.)
         """
         await self._authed("DELETE", f"/invitations/{int(invt_seq)}")
         self.log(f"iparking: cancelled invitation {int(invt_seq)}")
@@ -698,10 +765,16 @@ class IparkingApi:
 
         ## Two sequential budgets, not one nested pair
 
-        `REGISTER_TIMEOUT_S` (20 s) bounds the attempt. `RECOVERY_TIMEOUT_S` (25 s) bounds
+        `REGISTER_TIMEOUT_S` (20 s) bounds the attempt. `RECOVERY_TIMEOUT_S` (40 s) bounds
         the recovery, on a **fresh** clock. Wrapping both in a single outer wait would mean
         the timeout that fired *because* the attempt hung had already consumed the budget of
         the query sent to find out what the attempt did.
+
+        The recovery's budget is the larger of the two, which looks backwards until you count
+        what is inside it: the attempt sends **once**, while the recovery sends up to
+        `RECOVERY_ATTEMPTS` times with backoff between. A budget sized for one leg would have
+        cancelled the retries that exist to rescue it — the same self-defeating shape as
+        nesting the two waits, one level down.
 
         ## What each outcome means
 
@@ -803,14 +876,32 @@ class IparkingApi:
         """The single `POST /invitations`. Returns `(outcome_or_None, failure_note)`.
 
         `None` means "not settled" and routes to recovery. **No branch in here retries**,
-        and none may be added: not on a network error, not on `2031`, not on a timeout. An
-        expired token is handled by logging in *before* the write (step 1), never by
-        re-sending it.
+        and none may be added: not on a network error, not on `2031`, not on a timeout, and
+        **not on a connection reset** either. An expired token is handled by logging in
+        *before* the write (step 1), never by re-sending it.
         """
         try:
             response = await asyncio.wait_for(
                 self._run(self.transport.request, "POST", self._members_url("/invitations"),
-                          self._headers(), crypto.encode_body(payload)),
+                          self._headers(), crypto.encode_body(payload),
+                          # ── ZERO RETRIES. `attempts=1`, written as a literal, at the one
+                          # call site in this file that must never grow a retry.
+                          #
+                          # The members host resets ~30 % of connections, so the temptation
+                          # here is real and it is the trap. A reset **cannot distinguish**
+                          # "the request never arrived" from "it arrived, the server
+                          # registered the vehicle, and the reply died with the socket." The
+                          # transport is honest about this — it raises `ConnectionLost`, and a
+                          # retry would be safe if nothing were in flight — but *this*
+                          # endpoint's ambiguity is not about the socket. It is about whether
+                          # a vehicle now has access to a real building's car park. Retrying
+                          # risks registering it **twice**.
+                          #
+                          # The answer to the ambiguity is the *read* below (`_recover_register`),
+                          # which retries hard precisely so this one never has to. There is
+                          # deliberately no constant for this `1` in `const.py`: a named
+                          # tunable is an invitation, and this is an invariant.
+                          attempts=1),
                 REGISTER_TIMEOUT_S,
             )
         except TimeoutError:
@@ -878,6 +969,16 @@ class IparkingApi:
         The window is pinned to **`startDate == endDate == api_date`**. Left as a trailing
         range, a query for a future 방문 예정일 returns nothing and a *successful*
         registration reads as a failure.
+
+        ## This is the one query in the app that retries hardest, and why
+
+        `RECOVERY_ATTEMPTS` (5), one more than an ordinary read. Its entire job is resolving
+        the uncertainty that zero-retries-on-the-write deliberately creates, so **its own
+        failure is the expensive one**: it converts a knowable outcome into a bare error and
+        sends the user off to the vendor's website to find out whether a car is registered.
+        That happened live on 2026-08-04 — the write failed on a reset, the re-query hit
+        another reset, and the user got nothing. A read against a host that drops ~30 % of
+        connections is exactly the thing that must not be attempted once.
         """
         await asyncio.sleep(RECOVERY_SLEEP_S)
         try:
@@ -886,8 +987,19 @@ class IparkingApi:
                 stor_seq=stor_seq,
                 start_date=api_date,
                 end_date=api_date,
+                attempts=RECOVERY_ATTEMPTS,
             )
         except (IparkingError, TransportError) as exc:
+            # Logged, not just re-raised as a different type. The recovery giving up is the
+            # most consequential failure this app has, and it used to leave no trace at all:
+            # the register path logged three request lines and then nothing, so there was no
+            # way to see *why* an outcome went unknown. Type only — the vendor's message can
+            # echo request content back, and this one is already carrying a masked plate.
+            self.log(
+                f"iparking: recovery re-query failed for {mask_plate(plate)} on {api_date} "
+                f"after {RECOVERY_ATTEMPTS} attempt(s) ({type(exc).__name__}); "
+                f"outcome unknown (write cause={failure})"
+            )
             raise RegisterUncertain(self._uncertain_text(plate, api_date)) from exc
 
         matching = self.matching_rows(rows, plate, api_date)

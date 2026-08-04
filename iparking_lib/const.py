@@ -50,6 +50,41 @@ REQUIRED_SCHEMES: dict[str, str] = {
 OAUTH_PATH = "/api/oauth/store/authorize"
 MEMBERS_BASE_PATH = "/api/members"
 
+# --- Retry attempts, per endpoint semantics ----------------------------------
+#
+# `members.iparking.co.kr` resets roughly **30 %** of plain-HTTP connections. Measured
+# 2026-08-04: 20 identical read-only requests → 14 answers, 6 dead sockets. Not
+# header-dependent, not a rate limit, not a block; `curl` interleaved with `urllib` survives
+# it only because `curl` retries internally.
+#
+# The arithmetic that sizes these numbers, at P(fail) = 0.3:
+#
+#   attempts │ 1     2    3     4     5
+#   P(all)   │ 30 %  9 %  2.7 % 0.8 % 0.24 %
+#
+# **These are per *endpoint*, never per HTTP method.** This API serves reads over POST, so
+# "retry POSTs" is not a usable rule — it would retry `POST /invitations`, which is a write
+# against a real building. There is deliberately **no constant here for the register
+# attempt**: its call site passes a literal `1` next to the comment explaining why, because a
+# named tunable is an invitation and this one must not be tuned.
+
+#: Read-only endpoints — `POST /invitations/list`, `POST /parkinglot/list/{seq}`,
+#: `GET /invitations/{seq}`, and `DELETE /invitations/{seq}` (idempotent; see
+#: `client.cancel`). Four attempts takes a 30 % failure to **0.8 %**.
+READ_ATTEMPTS = 4
+
+#: The oauth login. Retryable because a retry just mints another token — there is nothing
+#: to double. Same four attempts as a read; the host is the reliable one, so this is
+#: insurance rather than the fix.
+LOGIN_ATTEMPTS = 4
+
+#: The register path's **recovery re-query**. Five, one more than an ordinary read, because
+#: this is the query that resolves the uncertainty zero-retries-on-the-write creates. When
+#: *it* fails, a knowable outcome becomes a bare error and the user is told to go look at the
+#: vendor's website — which is what happened live on 2026-08-04. Five attempts takes the
+#: chance of that to **0.24 %**.
+RECOVERY_ATTEMPTS = 5
+
 #: Sent on every request. A vendor bump here is a single-constant change whose failure mode
 #: is a clean `login_failed` rather than a crash.
 API_VERSION = "2.0.0"
@@ -68,25 +103,44 @@ HISTORY_DAYS_BACK = 90
 
 # --- Register-path budgets --------------------------------------------------
 #
-# Derived, not chosen. One transport leg is `transport.DEFAULT_TIMEOUT_S` = 15 s. A leg
-# that may re-login once is 30 s. Pairing's longest chain is 45 s, hence PAIR_TIMEOUT_S=60.
+# Derived, not chosen. One transport leg is `transport.DEFAULT_TIMEOUT_S` = 15 s. A leg that
+# may re-login once is 30 s.
+#
+# **A retried leg costs backoff as well as legs**, and the measured fault fails *fast* — a
+# reset arrives immediately, not after the 15 s timeout — so the honest worst case for N
+# attempts is (N-1) instant failures plus their backoffs plus one full 15 s leg. From
+# `transport.RETRY_BACKOFF_*`, the jittered ceiling is 3.15 s for 4 attempts and 6.15 s for 5.
+# The pathological case where every leg *also* burns its full timeout is deliberately not
+# budgeted for: it is not the fault that was measured, and sizing for it would mean a
+# two-minute Flow card.
 
 #: Budget for the single `POST /invitations` attempt. 20 s = one 15 s leg plus slack for
-#: the executor hand-off. **There are no retries inside it** — see `client.register`.
+#: the executor hand-off. **There are no retries inside it**, so this number is untouched by
+#: the retry work and that is the point — see `client.register`.
 REGISTER_TIMEOUT_S = 20.0
 
 #: Budget for the recovery re-query, **sequential to** `REGISTER_TIMEOUT_S` and never
 #: nested inside it. The whole reason recovery exists is that the outer wait fired; making
 #: it share the budget that just expired would leave it no time to answer the one question
 #: that matters — did the write land?
-RECOVERY_TIMEOUT_S = 25.0
+#:
+#: 40 s, raised from 25 s when the re-query gained `RECOVERY_ATTEMPTS` tries: 3 s pause +
+#: 6.15 s of worst-case backoff + a 15 s leg = 24.2 s, and a budget that merely *fits* would
+#: mean the retries meant to rescue the recovery get killed by the timeout bounding them.
+#: That is the same self-defeating shape as nesting the two budgets, one level down.
+RECOVERY_TIMEOUT_S = 40.0
 
 #: Pause before the recovery re-query, so a write the server is still committing has time
 #: to become visible to a read. Counted inside `RECOVERY_TIMEOUT_S`.
 RECOVERY_SLEEP_S = 3.0
 
 #: Pairing enumerates every authorization entry × every lot; 45 s of legs plus slack.
-PAIR_TIMEOUT_S = 60.0
+#:
+#: 90 s, raised from 60 s for the same reason `RECOVERY_TIMEOUT_S` moved: every leg in that
+#: chain is now a retrying read. Pairing is the *most* reset-exposed path in the app — one
+#: `parkinglot/list` per store, each independently ~30 % likely to fail once — so it is where
+#: the retries matter most and where a budget that ignored them would cancel them.
+PAIR_TIMEOUT_S = 90.0
 
 #: In-process ceiling on `POST /invitations`. **Secondary.** The actual guarantee against
 #: runaway writes is *zero retries*; this is a second wall, and it is **reset by the

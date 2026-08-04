@@ -60,6 +60,74 @@ Consequences:
 - Only the bearer token and plate/date data ever traverse cleartext. Disclose this in the
   README and settings page.
 
+## Connection reliability — `members.iparking.co.kr` resets ~30 % of connections
+
+**Measured live 2026-08-04.** 20 identical read-only requests to the cleartext host:
+**14 answered, 6 died mid-exchange.** One session in production hit it three times over —
+a registration, its recovery re-query, and device pairing all failed at once — which is how
+it was found.
+
+The same fault has two names depending on where you are standing:
+
+| Where | How it surfaces |
+|---|---|
+| macOS (dev, outside Docker) | `ConnectionResetError`, errno 54 |
+| the Homey hub's Python runtime | `http.client.IncompleteRead(255 bytes read)` |
+
+`IncompleteRead` is worth its own note: it subclasses `http.client.HTTPException`, **not**
+`OSError`, so a handler that catches `URLError`/`OSError` does not catch it. That is a real
+trap — it is why one failed registration produced three request log lines and then no error
+and no traceback at all.
+
+### What it is not — ruled out by measurement, so do not re-litigate
+
+- **Not header-dependent.** Tried default urllib UA, a browser UA, `Accept-Encoding: gzip,
+  deflate`, and no `Accept-Encoding`. Failures land randomly across all of them: the
+  default-UA request *passed* while the browser-UA one failed, then the same browser UA
+  passed once another header was added.
+- **Not a dev/Docker artefact.** Reproduced from a Mac entirely outside Docker.
+- **Not a rate limit and not a block.** `curl` succeeds interleaved with failing `urllib`
+  calls. `curl` survives because it retries internally — **that is the entire difference.**
+- **Not the oauth host.** HTTPS to `oauth.parkingcloud.co.kr` is reliable. Only the cleartext
+  host does this.
+
+### Retry policy, per endpoint — never per HTTP method
+
+At P(fail) = 0.3 the arithmetic that sizes this is:
+
+| attempts | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| P(all fail) | 30 % | 9 % | 2.7 % | **0.8 %** | 0.24 % |
+
+This API serves **reads over POST**, so "retry POSTs" is not a usable rule — it would retry
+the vehicle registration. The policy is therefore keyed on what an endpoint *means*:
+
+| Endpoint | Attempts | Why |
+|---|---|---|
+| `POST {oauth}/api/oauth/store/authorize` | 4 | a retry just mints another token |
+| `POST {origin}/invitations/list` | 4 | read |
+| `POST {origin}/parkinglot/list/{seq}` | 4 | read (pairing — the most exposed path) |
+| `GET {origin}/invitations/{seq}` | 4 | read |
+| `DELETE {origin}/invitations/{seq}` | 4 | idempotent: re-cancelling returns `13001`, a no-op |
+| recovery re-query after a register | **5** | it resolves the uncertainty the line below creates |
+| **`POST {origin}/invitations`** | **1 — zero retries** | see below |
+
+**`POST /invitations` must never retry.** A reset cannot distinguish "the request never
+arrived" from "it arrived, the vehicle was registered, and the reply died with the socket". A
+second POST resolves nothing and risks registering a visitor vehicle **twice at a real
+building**. The answer to that ambiguity is the recovery *read*, which is exactly why the
+re-query retries harder than anything else in the app: when it fails, a knowable outcome
+becomes a bare "we cannot tell you" for the user.
+
+**A reset is not a timeout, and the two must stay separate classes.** A reset means the
+connection is gone and nothing is in flight, so a read may safely ask again. A timeout means
+the request may **still be running and may still land**. Conflating them is what would make
+the write retryable by accident — note that `TimeoutError` is an `OSError` subclass, so any
+classifier that leads with an errno test gets this wrong.
+
+Backoff is exponential and **jittered** (0.3 s base, ×2, capped at 2 s, ±50 %). The jitter is
+not decoration: paired devices poll on the same hour and must not line their retries up.
+
 ## Endpoints (all verified live except the two marked)
 
 ### 1. Login — `POST {oauth}/api/oauth/store/authorize`
@@ -147,8 +215,18 @@ Returns `park_name`, `invitation_date`, `car_number`, `inot_status`, `mobile_1/_
 ### 6. 수정 — `PUT {origin}/invitations`
 `{parkSeq, parkName, invtSeq, invitationDate, carNumber, memo, mobile1..3}`
 
-### 7. 취소 — `DELETE {origin}/invitations/{invt_seq}`  *(NOT exercised — write op)*
+### 7. 취소 — `DELETE {origin}/invitations/{invt_seq}`
 No body. Codes: `13001` alreadyDeleted, `13002` cannotDelete.
+
+Exercised live 2026-08-04 (see `docs/PROBE.md`). Two facts that shape the client:
+
+- It does **not** delete the row. It flips `inot_status` to `CANCEL`; the row keeps its
+  `invt_seq` and stays in 등록 내역. A caller looking for the row's *disappearance* would
+  report a working 취소 as broken.
+- Re-cancelling an already-cancelled row returns `13001 alreadyDeleted` and changes nothing.
+  That makes this endpoint **idempotent**, which is why it may retry on a connection reset
+  even though it is a write — the two readings of a reset leave the same end state. Contrast
+  `POST /invitations`, which has no such property.
 
 ### 8. SMS 발송 — `POST {origin}/invitations/{invt_seq}/sms`
 No body.
@@ -188,6 +266,11 @@ UI hint text: `예시) 12가1234, 임1234, 임123456, 외교123456`.
    than one parking lot per store (`parkinglot/list` returns an array).
 5. Registration is a **real-world mutation** on a live building's access-control system.
    Any automated test must clean up via `DELETE /invitations/{seq}`.
+6. **The API host drops ~30 % of connections** (measured; see the reliability section above).
+   Every read has to retry to be usable at all, and the one write that must *not* retry needs
+   a recovery read behind it. Any new endpoint added to this client needs an explicit
+   attempts decision made on its **semantics**, because the method cannot tell you: this API
+   serves reads over POST.
 
 ---
 

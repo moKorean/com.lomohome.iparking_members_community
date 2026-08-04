@@ -31,7 +31,13 @@ from conftest import (
     lots_ok,
 )
 
-from iparking_lib.const import MEMBERS_HOST, OAUTH_HOST
+from iparking_lib.const import (
+    LOGIN_ATTEMPTS,
+    MEMBERS_HOST,
+    OAUTH_HOST,
+    READ_ATTEMPTS,
+    RECOVERY_ATTEMPTS,
+)
 from iparking_lib.iparking.client import (
     IparkingApi,
     IparkingApiError,
@@ -40,7 +46,17 @@ from iparking_lib.iparking.client import (
     NeedCredentialsError,
     NotPermittedError,
 )
-from iparking_lib.iparking.transport import BodyRedirect, InsecureRedirect, NetworkError
+from iparking_lib.iparking.transport import (
+    BodyRedirect,
+    ConnectionLost,
+    InsecureRedirect,
+    NetworkError,
+)
+
+
+def reset() -> ConnectionResetError:
+    """One instance of the members host's measured fault (~30 % of plain-HTTP connections)."""
+    return ConnectionResetError(54, "Connection reset by peer")
 
 
 def header(headers: dict, name: str) -> str | None:
@@ -633,6 +649,130 @@ def test_cancel_issues_a_delete_with_no_body(make_api):
 
     assert stub.urls("DELETE") == [url]
     assert stub.bodies_for(url) == [None]
+
+
+# --- retrying the reset-prone host, per endpoint -----------------------------
+#
+# `members.iparking.co.kr` resets ~30 % of plain-HTTP connections (measured 2026-08-04: 20
+# identical read-only requests → 14 answers, 6 dead sockets). Each test below names the
+# *endpoint*, never the method, because this API serves reads over POST and a method-shaped
+# rule would retry `POST /invitations`. That endpoint's own test lives in
+# `test_register_path.py`, where the negative assertions are.
+
+
+def test_a_reset_on_the_history_read_retries_and_then_succeeds(make_api):
+    """`POST /invitations/list` — a POST that is a read, and therefore retryable."""
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        HISTORY_URL: [reset(), history_ok((("12가4567", "20260805", "RESERVE"),))],
+    })
+
+    rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+
+    assert [r.car_number for r in rows] == ["12가4567"], "the retry produced the real answer"
+    assert stub.count(HISTORY_URL) == 2
+    assert len(stub.backoffs) == 1
+
+
+def test_a_reset_on_the_lot_list_read_retries_and_then_succeeds(make_api):
+    """`POST /parkinglot/list/{seq}` — the pairing path, the most reset-exposed in the app."""
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), LOTS_URL: [reset(), lots_ok()]})
+
+    lots = asyncio.run(api.enumerate_lots())
+
+    assert [lot.lot_id for lot in lots] == [LOT_ID]
+    assert stub.count(LOTS_URL) == 2
+
+
+def test_a_reset_on_the_detail_read_retries_and_then_succeeds(make_api):
+    """`GET /invitations/{seq}`."""
+    url = f"{MEMBERS_ROOT}/invitations/3184553"
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        url: [reset(), envelope("0000", resultData={"inot_status": "RESERVE"})],
+    })
+
+    assert asyncio.run(api.detail(3184553))["inot_status"] == "RESERVE"
+    assert stub.count(url) == 2
+
+
+def test_a_reset_on_the_login_retries_and_then_succeeds(make_api):
+    """The oauth login. A retry just mints another token, so there is nothing to double.
+
+    Also the clearest proof that the policy is per endpoint: this is a POST carrying a body
+    that *is* retryable, sitting next to a POST carrying a body that is not.
+    """
+    api, stub, _ = make_api({OAUTH_URL: [reset(), login_ok()], LOTS_URL: lots_ok()})
+
+    asyncio.run(api.login())
+
+    assert api.logged_in
+    assert stub.count(OAUTH_URL) == 2
+
+
+def test_a_reset_on_the_cancel_retries_because_re_cancelling_is_a_no_op(make_api):
+    """`DELETE /invitations/{seq}` may retry, and this test is here to stop that being
+    "fixed" into a non-retry by someone reasoning "it is a write, so zero retries".
+
+    The reason is measured, not stylistic: deleting an already-cancelled row returns
+    `13001 alreadyDeleted` (verified live 2026-08-04), a no-op on a row that is already
+    `CANCEL`. So both readings of a reset — "it never arrived" and "it arrived and the reply
+    was lost" — leave the *same* end state. `POST /invitations` has no such property, and
+    that asymmetry is the whole reason retry policy is decided per endpoint.
+    """
+    url = f"{MEMBERS_ROOT}/invitations/3184553"
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), url: [reset(), envelope("0000", "성공")]})
+
+    asyncio.run(api.cancel(3184553))
+
+    assert stub.count(url) == 2
+
+
+def test_a_read_gives_up_after_the_cap_and_raises_connection_lost(make_api):
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: reset()})
+
+    with pytest.raises(ConnectionLost):
+        asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+
+    assert stub.count(HISTORY_URL) == READ_ATTEMPTS
+    assert READ_ATTEMPTS >= 4, "at P(fail)=0.3, four attempts is what buys 0.8%"
+
+
+def test_a_read_does_not_retry_a_timeout(make_api):
+    """The boundary, at the client layer: `attempts=4` still means one send on a timeout.
+
+    A read timing out is harmless to re-send, so this test is not protecting the read — it is
+    protecting the *rule*, because the same `attempts` plumbing carries the register POST.
+    """
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: TimeoutError("timed out")})
+
+    with pytest.raises(NetworkError) as caught:
+        asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+
+    assert not isinstance(caught.value, ConnectionLost)
+    assert stub.count(HISTORY_URL) == 1, "a timeout may still be in flight; never re-sent"
+
+
+def test_the_attempt_counts_are_ordered_by_consequence():
+    """Not a tautology: it pins the *ordering* the numbers exist to express.
+
+    The recovery re-query must try harder than an ordinary read, because its failure is what
+    converts a knowable registration outcome into a bare error for the user.
+    """
+    assert RECOVERY_ATTEMPTS > READ_ATTEMPTS >= 4
+    assert LOGIN_ATTEMPTS >= 4
+
+
+def test_a_reset_is_logged_with_its_type_on_every_attempt(make_api):
+    """The app logged three request lines and then nothing. That was its own defect."""
+    api, _stub, logs = make_api({OAUTH_URL: login_ok(), HISTORY_URL: reset()})
+
+    with pytest.raises(ConnectionLost):
+        asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+
+    joined = "\n".join(logs)
+    assert "ConnectionResetError" in joined
+    assert f"gave up after {READ_ATTEMPTS} attempt(s)" in joined
 
 
 def test_detail_is_a_get_with_no_body(make_api):
