@@ -363,7 +363,26 @@
           var button = document.createElement("button");
           button.className = "danger tiny";
           button.textContent = t("cancelBtn");
-          button.addEventListener("click", function () { onCancel(row); });
+          // Two-step, on the button itself: first click arms it, second click cancels. See
+          // `onCancel` for why there is no modal dialog here.
+          var armed = false;
+          button.addEventListener("click", function () {
+            if (!armed) {
+              armed = true;
+              button.textContent = t("cancelArm");
+              button.title = t("cancelConfirm");
+              // Disarm if they walk away from it, so a stale armed button cannot be triggered
+              // by a later stray click.
+              window.setTimeout(function () {
+                if (!armed) return;
+                armed = false;
+                button.textContent = t("cancelBtn");
+                button.removeAttribute("title");
+              }, 5000);
+              return;
+            }
+            onCancel(row);
+          });
           act.appendChild(button);
         }
         tr.appendChild(act);
@@ -521,8 +540,21 @@
         .then(function () { lock(false); });
     }
 
+    /*
+     * Reached only from an already-armed 취소 button, which is the confirmation step.
+     *
+     * There is deliberately no `window.confirm` here any more. It was the first line of this
+     * function and it made the button do **nothing at all** on the maintainer's hub: a Homey
+     * settings page is a webview, and a blocked or throwing `window.confirm` either returns a
+     * falsy value or raises — both of which end the handler before the request is made, with
+     * no dialog and no error for the user to see. A silent early return is the worst shape a
+     * failure can take, because the button looks fine.
+     *
+     * The two-step button replaces it rather than a different dialog API: it is our own DOM,
+     * so it cannot be vetoed by the host, and this action withdraws a real access grant at a
+     * building, so it should not be a single stray click either way.
+     */
     function onCancel(row) {
-      if (!window.confirm(t("cancelConfirm"))) return;
       lock(true);
       msg("hist-msg", t("cancelling"));
       C.cancel(row.invt_seq).then(function (res) {

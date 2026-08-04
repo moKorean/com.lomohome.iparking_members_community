@@ -125,6 +125,9 @@
       cancelling: "취소 중…",
       cancelOk: "취소했습니다.",
       cancelConfirm: "이 등록을 취소할까요? 출입통제 시스템에서 즉시 해제됩니다.",
+      // Shown *on the button itself* as a second step. `window.confirm` is not usable here —
+      // see the note in index.html's `onCancel`.
+      cancelArm: "정말 취소?",
       statusRESERVE: "예약",
       statusIN: "입차",
       statusOUT: "출차",
@@ -193,6 +196,7 @@
       cancelling: "Cancelling…",
       cancelOk: "Cancelled.",
       cancelConfirm: "Cancel this registration? The access grant is withdrawn immediately.",
+      cancelArm: "Really cancel?",
       statusRESERVE: "Reserved",
       statusIN: "Entered",
       statusOUT: "Exited",

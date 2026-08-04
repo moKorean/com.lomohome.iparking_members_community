@@ -26,5 +26,9 @@
   "0.1.6": {
     "ko": "자주 오는 차량의 차량번호에 공백을 넣어 저장하면 정리된 값이 설정에 실제로 반영됩니다. 이전에는 저장 직후 쓰기가 거부되어 입력한 공백이 그대로 남아 있었습니다.",
     "en": "Whitespace typed into a frequent visitor’s plate is now actually tidied in the setting. The write was previously refused right after a save, so the spacing stayed as typed."
+  },
+  "0.1.7": {
+    "ko": "센서 이름을 \"오늘 방문 예정\"으로 바꿨습니다. 등록 내역의 취소 버튼이 눌러도 아무 일이 없던 문제를 고쳤습니다 — 이제 한 번 누르면 \"정말 취소?\"로 바뀌고, 다시 누르면 취소됩니다.",
+    "en": "The sensor is now called “Expected today”. Fixed the Cancel button in the registration history doing nothing when pressed — it now arms on the first press and cancels on the second."
   }
 }

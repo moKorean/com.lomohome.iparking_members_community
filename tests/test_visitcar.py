@@ -1176,7 +1176,10 @@ def test_the_count_is_a_read_only_integer_sensor_with_insights():
     assert spec["decimals"] == 0
     assert spec["min"] == 0
     assert spec["insights"] is True
-    assert spec["title"] == {"ko": "오늘 등록", "en": "Registered today"}
+    # 오늘 방문 예정, not 오늘 등록: the maintainer renamed it because "등록" describes the act
+    # this app performs, while the number answers "how many cars are coming today" — and a
+    # cancelled registration, which is not counted, was still 등록된 at some point.
+    assert spec["title"] == {"ko": "오늘 방문 예정", "en": "Expected today"}
     assert spec["units"] == {"ko": "대", "en": "cars"}
 
 

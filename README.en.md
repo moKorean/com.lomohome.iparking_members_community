@@ -68,8 +68,8 @@ The Homey app itself is © 2026 Geunwon Mo.
 
 - **Account sign-in** — sign in with your iParking MEMBERS ID/password from the app
   settings.
-- **"Registered today" sensor** — how many vehicles are **registered for today** at this
-  lot, as a device capability (`Registered today · 2 cars`). Cancelled registrations are not
+- **"Expected today" sensor** — how many vehicles are **expected to visit today** at this
+  lot, as a device capability (`Expected today · 2 cars`). Cancelled registrations are not
   counted: iParking's 취소 flips a row's status to `CANCEL` rather than removing it, so
   counting them shows 6 on a day whose honest answer is 1. It refreshes hourly (± 10 %) in a
   single request, and this app's own register, cancel or history read updates it immediately at

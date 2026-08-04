@@ -2,8 +2,8 @@
   "$comment": "오늘 등록된 차량 수 — the one capability every paired device carries, and the reason the hourly poll exists. It replaced `iparking_park_name`, which was 주차장명: a constant, and the same string Homey already shows as the device's name, so the tile printed it twice and 24 requests/day went to re-confirm it. This value changes whenever anybody registers a car, including on the vendor's own website where this app cannot see it happen — which is what makes the poll worth its traffic. `setable: false` + `uiComponent: sensor` because nothing on a tile may write it; the writes are this app's own register/cancel and the poll. `decimals: 0` — a count of cars is an integer, and Homey would otherwise render `1.0`. **`insights: true` is deliberate, and it is the opposite call from the one 주차장명 got, for the same reason**: a near-constant string graphed over time is an empty graph, while a count of registrations per day is a real measurement that answers a real question. **CANCEL rows are not counted** — 취소 flips `inot_status` rather than deleting the row, so a day's rows are often mostly cancellations (counting them showed 6 on the maintainer's account where the honest answer was 1); see iparking_lib/const.py's ACTIVE_STATUSES and CAPABILITY_TODAY_COUNT.",
   "type": "number",
   "title": {
-    "ko": "오늘 등록",
-    "en": "Registered today"
+    "ko": "오늘 방문 예정",
+    "en": "Expected today"
   },
   "units": {
     "ko": "대",
