@@ -853,12 +853,35 @@ def test_recovery_makes_the_device_available_again(make_device):
 def test_set_is_guarded_by_get_capabilities(make_device):
     """The real SDK raises on a capability the device does not have, so the app filters
     against `get_capabilities()` itself — which is what lets a capability list be edited in
-    `driver.compose.json` without every paired device throwing, and what makes the 주차장명
-    removal safe on a device that has already shed it."""
+    `driver.compose.json` without every paired device throwing.
+
+    Aimed at a favourite button rather than at the count, because a device that starts with no
+    capabilities now *adopts* the count at `on_init` (see the next test): after adoption the
+    count is present on every device, so it can no longer demonstrate the guard. A button for an
+    empty slot is never added, so it is the capability that is genuinely absent.
+    """
     dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]), capabilities=())
 
-    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) is None
-    assert not any("set iparking_today_count failed" in line for line in dev.logs)
+    absent = quick_capability(MAX_FAVORITES)          # no favourite configured in this test
+    assert absent not in dev.get_capabilities()
+    asyncio.run(dev._set(absent, True))
+    assert dev.get_capability_value(absent) is None
+    assert not any(f"set {absent} failed" in line for line in dev.logs)
+
+
+def test_a_device_paired_before_the_count_existed_adopts_it(make_device):
+    """`driver.compose.json`'s capability list applies to a device **only at pairing**.
+
+    Declaring the sensor there gives it to new devices and to nobody else, so without an
+    explicit `add_capability` at `on_init` an existing user upgrades, loses 주차장명 as intended,
+    and gains nothing. That is exactly what happened on the maintainer's hub: after the upgrade
+    the paired device reported `['iparking_quick_1', 'iparking_quick_2']` and no count at all.
+    """
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]), capabilities=())
+
+    assert CAPABILITY_TODAY_COUNT in dev.get_capabilities()
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+    assert any("adding the 오늘 등록 sensor" in line for line in dev.logs)
 
 
 # --- updating the count without spending a request ----------------------------

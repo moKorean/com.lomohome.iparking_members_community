@@ -267,6 +267,10 @@ class VisitCarDevice_(device.Device):
             await self._shed_park_name()
         except Exception as exc:
             self.log(f"iparking: the 주차장명 sensor could not be removed: {exc}")
+        try:
+            await self._adopt_today_count()
+        except Exception as exc:
+            self.log(f"iparking: the 오늘 등록 sensor could not be added: {exc}")
         # Reconciled at init as well as on every save, so a hub restart does not lose the
         # buttons — a paired device is re-created from scratch and `add_capability` is the only
         # thing that puts them back.
@@ -328,6 +332,27 @@ class VisitCarDevice_(device.Device):
         # It never had a listener, but the discard keeps one rule for every removal rather than
         # two: a capability that goes away takes its listener registration with it.
         self._listening.discard(CAPABILITY_PARK_NAME)
+
+    async def _adopt_today_count(self) -> None:
+        """Add the 오늘 등록 sensor to a device paired by an earlier version.
+
+        The mirror of `_shed_park_name`, and it is needed for the same reason that one is:
+        **`driver.compose.json`'s capability list only applies to a device at the moment it is
+        paired.** Declaring the sensor there gives it to new devices and to nobody else, so
+        without this an existing user upgrades, loses 주차장명 as intended, and gains nothing —
+        the tile ends up with only its buttons and the new sensor is invisible.
+
+        Verified on hardware: after the upgrade the paired device reported
+        `capabilities: ['iparking_quick_1', 'iparking_quick_2']` and no count at all.
+
+        A no-op on a freshly paired device, and idempotent, so a second `on_init` costs nothing.
+        """
+        if CAPABILITY_TODAY_COUNT in self.get_capabilities():
+            return
+        self.log("iparking: adding the 오늘 등록 sensor to a device paired before it existed")
+        await self._sdk_call(
+            ("add_capability", "addCapability"), CAPABILITY_TODAY_COUNT
+        )
 
     # --- 오늘 등록: the sensor and its poll -----------------------------------
 
