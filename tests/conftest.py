@@ -455,14 +455,61 @@ class FakeFlow(_Strict):
         return self._card("condition", card_id)
 
 
+class FakeNotifications(_Strict):
+    """`homey.notifications` — the Flow card's register outcome goes here.
+
+    The Python SDK's spelling and call shape for this manager are **not** established
+    anywhere readable (the Node API is `createNotification({excerpt})`, while every manager
+    this app does use is snake_case with plain arguments), so `device._notify` tries both
+    names and three call shapes. This fake therefore models *one* contract at a time and
+    raises `TypeError` on the others — which is what makes the tolerance testable rather
+    than merely present: a fake that accepted everything would pass whichever shape the
+    code tried first, including a wrong one.
+    """
+
+    def __init__(self, *, spelling="snake", shape="kwarg", awaitable=False, error=None):
+        self.excerpts = []
+        self._shape = shape
+        self._awaitable = awaitable
+        self._error = error
+        if spelling in ("snake", "both"):
+            self.create_notification = self._create
+        if spelling in ("camel", "both"):
+            self.createNotification = self._create  # noqa: N815 — the SDK's own spelling
+
+    def _create(self, *args, **kwargs):
+        if self._shape == "kwarg":
+            if args or list(kwargs) != ["excerpt"]:
+                raise TypeError("create_notification() expects excerpt=")
+            excerpt = kwargs["excerpt"]
+        elif self._shape == "dict":
+            if kwargs or len(args) != 1 or not isinstance(args[0], dict):
+                raise TypeError("create_notification() expects one options dict")
+            excerpt = args[0].get("excerpt")
+        else:  # positional string
+            if kwargs or len(args) != 1 or not isinstance(args[0], str):
+                raise TypeError("create_notification() expects one string")
+            excerpt = args[0]
+        if self._error is not None:
+            raise self._error
+        self.excerpts.append(excerpt)
+        return _maybe_async(None, self._awaitable)
+
+
 class FakeHomey(_Strict):
     """The `self.homey` every handler, device and driver is handed."""
 
-    def __init__(self, *, settings=None, i18n=None, app=None, flow=None, language=None):
+    def __init__(self, *, settings=None, i18n=None, app=None, flow=None, language=None,
+                 notifications=None):
         self.settings = settings if settings is not None else FakeSettings()
         self.i18n = i18n if i18n is not None else FakeI18n()
         self.app = app if app is not None else FakeApp()
         self.flow = flow if flow is not None else FakeFlow()
+        # Left absent unless a test asks for it: `device._notify` checks for the manager with
+        # `getattr(..., None)` and degrades to a log line, and that branch is reachable only
+        # when the attribute genuinely does not exist.
+        if notifications is not None:
+            self.notifications = notifications
         # compat.language's last resort. Left unset unless a test asks for it, so the
         # accessor chain above is what actually gets exercised.
         if language is not None:
@@ -577,7 +624,7 @@ def make_homey():
     def _make(*, api=None, settings=None, awaitable=False, language="ko",
               i18n_spelling="snake", flow_spelling="snake", expose_shared_api=True,
               expose_reauth=True, expose_logout=True, shared_api_error=None,
-              reauth_error=None, homey_language=None):
+              reauth_error=None, homey_language=None, notifications=None):
         return FakeHomey(
             settings=FakeSettings(settings, awaitable=awaitable),
             i18n=FakeI18n(language, spelling=i18n_spelling, awaitable=awaitable),
@@ -586,6 +633,7 @@ def make_homey():
                         shared_api_error=shared_api_error, reauth_error=reauth_error),
             flow=FakeFlow(spelling=flow_spelling),
             language=homey_language,
+            notifications=notifications,
         )
 
     return _make

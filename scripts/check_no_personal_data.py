@@ -153,8 +153,18 @@ def _run(*args: str) -> str:
 
 
 def _tracked() -> list[tuple[str, str]]:
+    """Tracked files **and** untracked-but-not-ignored ones.
+
+    The untracked half is not a nicety. An earlier version read only `git ls-files`, so a
+    worker who had just created nine new files got a clean report that covered none of
+    them — the check passed *vacuously*, which is worse than not running it, because the
+    output looks like evidence. Anything git would include in the next `git add -A` is in
+    scope here.
+    """
+    listed = _run("git", "ls-files").split("\n")
+    listed += _run("git", "ls-files", "--others", "--exclude-standard").split("\n")
     out = []
-    for path in _run("git", "ls-files").split("\n"):
+    for path in dict.fromkeys(listed):
         if not path or path.endswith(SKIP_SUFFIXES):
             continue
         try:

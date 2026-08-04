@@ -12,9 +12,14 @@ is original vector artwork rather than a photo — but the resize step mirrors
 com.lomohome.navien's scripts/make_images.py exactly: one high-resolution
 source, resized to the required sizes by script, never hand-edited per size.
 
-assets/icon.svg and assets/capabilities/parking.svg are maintained by hand —
-this script deliberately does NOT touch them, so it can't overwrite hand-drawn
-artwork.
+Driver images are the same idea one shape over: square (75 / 500 / 1000) on an
+opaque white background, per Homey's driver-image guideline, rasterized straight
+from docs/device-image-<driver>.svg with `rsvg-convert` (which honours the exact
+pixel size, so there is no resize step and no intermediate PNG to keep in sync).
+
+assets/icon.svg, assets/capabilities/parking.svg and drivers/*/assets/icon.svg
+are maintained by hand — this script deliberately does NOT touch them, so it
+can't overwrite hand-drawn artwork.
 """
 
 import subprocess
@@ -24,6 +29,12 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 
 APP_SIZES = {"small": (250, 175), "large": (500, 350), "xlarge": (1000, 700)}
+
+#: Driver images are square, unlike the 10:7 app-store ones.
+DEVICE_SIZES = {"small": 75, "large": 500, "xlarge": 1000}
+
+#: driver id -> source graphic in docs/.
+DEVICE_SOURCES = {"visitcar": "device-image-visitcar.svg"}
 
 
 def _sips(src: Path, w: int, h: int, dst: Path) -> None:
@@ -35,12 +46,30 @@ def _sips(src: Path, w: int, h: int, dst: Path) -> None:
     print(f"  {dst.relative_to(ROOT)}  {w}x{h}")
 
 
+def _rsvg(src: Path, size: int, dst: Path) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["rsvg-convert", "-w", str(size), "-h", str(size), str(src), "-o", str(dst)],
+        check=True,
+    )
+    print(f"  {dst.relative_to(ROOT)}  {size}x{size}")
+
+
 def resize_images() -> None:
     print("app store images:")
     for name, (w, h) in APP_SIZES.items():
         _sips(DOCS / "app-image.png", w, h, ROOT / "assets/images" / f"{name}.png")
 
 
+def driver_images() -> None:
+    print("driver images:")
+    for driver_id, source in DEVICE_SOURCES.items():
+        for name, size in DEVICE_SIZES.items():
+            _rsvg(DOCS / source, size,
+                  ROOT / "drivers" / driver_id / "assets/images" / f"{name}.png")
+
+
 if __name__ == "__main__":
     resize_images()
+    driver_images()
     print("done")

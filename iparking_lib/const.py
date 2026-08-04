@@ -125,6 +125,44 @@ STATUS_CANCEL = "CANCEL"      # 취소
 #:   the defect that survived a full review round.
 ACTIVE_STATUSES = frozenset({STATUS_RESERVE, STATUS_IN, STATUS_OUT})
 
+# --- Device poll cadence ----------------------------------------------------
+#
+# 24 requests/day/device + ~1 login/week. This is politeness enforced by arithmetic rather
+# than asserted, and it is the number the counterparty risk in the plan is priced against:
+# the vendor can rate-limit or block this client regardless of how it is distributed.
+
+#: One hour. There is **no `poll_interval` device setting** in v0.1.0 — deliberately. The
+#: only capability is 주차장명, which changes when a building office renames a lot, i.e.
+#: approximately never; a knob here would invite exactly the tightening this cadence exists
+#: to avoid, in exchange for refreshing a near-constant string sooner.
+POLL_INTERVAL_S = 3600.0
+
+#: ± fraction applied to every poll sleep, so N paired lots do not tick in lockstep.
+POLL_JITTER = 0.10
+
+#: One-shot 0–10 % offset added to the *first* loop sleep only, so devices that all start at
+#: app boot spread out instead of converging on the same second forever after.
+POLL_START_JITTER = 0.10
+
+#: Backoff walk for restarting a poll task that died on its own. Same shape as navien's
+#: `MQTT_BACKOFF_S`: a crash loop costs 5 s once and 300 s thereafter, so a genuine bug
+#: leaves a readable log rather than a flood.
+POLL_BACKOFF_S = (5, 15, 30, 60, 120, 300)
+
+#: Consecutive failed polls before the device goes unavailable. **Two, not one.** One is a
+#: single dropped request on a cloud API reached over plain HTTP, which is ordinary; two is a
+#: pattern. And the failure this guards against is not a loud one — the capability keeps the
+#: last name it read, so without the transition a lot that stopped answering would sit on
+#: screen looking exactly like a healthy one.
+MAX_POLL_FAILURES = 2
+
+# --- Flow cards -------------------------------------------------------------
+
+#: `.homeycompose/flow/actions/register_visitor.json`. The app's **only** Flow card: the
+#: settings page is the primary surface, and every extra card here would be another route to
+#: a write against a real building's access control.
+FLOW_REGISTER_VISITOR = "register_visitor"
+
 # --- Settings keys ----------------------------------------------------------
 #
 # The `access_token` is deliberately NOT here. It is memory-only: a 7-day credential that
@@ -136,8 +174,29 @@ SETTING_USERNAME = "iparking_id"
 SETTING_PASSWORD = "iparking_pw"
 SETTING_LANGUAGE = "language"
 
+# --- Device store keys ------------------------------------------------------
+#
+# Everything a paired device needs *except* its identity. `data.id` holds `lot_id` and is
+# **immutable after pairing**, so getting that wrong forces every user to re-pair; the store
+# is mutable, which is why `stor_seq`, `park_seq` and `park_name` live here even though the
+# first two never actually change. v0.1.0 writes none of them at runtime (criterion 18).
+
 STORE_STOR_SEQ = "stor_seq"
 STORE_PARK_SEQ = "park_seq"
 STORE_PARK_NAME = "park_name"
 
+#: The same value as `data.id`, kept in the store as well so the device layer can read its
+#: lot id without `get_data()` — one accessor rather than two, and the store is the object
+#: both the driver and the device already agree on.
+STORE_LOT_ID = "lot_id"
+
+#: The app's one and only capability — 주차장명 as a read-only string sensor (requirement 4).
+#:
+#: **It carries no `insights`, and that is not an oversight.** Homey's schema does permit
+#: `insights` on a `string` capability, so a future maintainer scanning
+#: `.homeycompose/capabilities/iparking_park_name.json` may read its absence as a missing
+#: field. It is not: this value is the name of a parking lot. It changes when a building
+#: office renames the lot, i.e. approximately never, and a log of a near-constant string is
+#: not a measurement of anything. Adding it would produce an empty graph on the device page
+#: and nothing else.
 CAPABILITY_PARK_NAME = "iparking_park_name"

@@ -97,5 +97,111 @@
   "bugs": {
     "url": "https://github.com/moKorean/com.lomohome.iparking_members_community/issues"
   },
-  "source": "https://github.com/moKorean/com.lomohome.iparking_members_community"
+  "source": "https://github.com/moKorean/com.lomohome.iparking_members_community",
+  "flow": {
+    "actions": [
+      {
+        "title": {
+          "ko": "방문차량 등록",
+          "en": "Register a visitor vehicle"
+        },
+        "titleFormatted": {
+          "ko": "[[car_number]] 방문 등록 (방문 예정일 [[visit_date]])",
+          "en": "Register [[car_number]] for [[visit_date]]"
+        },
+        "hint": {
+          "ko": "차량번호만 넣으면 오늘 방문으로 등록합니다. 방문 예정일을 함께 넣으면 그 날짜로 등록합니다. 등록 결과는 Homey 알림으로 도착하며, 실제로 등록된 날짜가 함께 표시됩니다. 이 카드는 단지의 실제 출입통제 시스템에 등록을 남깁니다.",
+          "en": "With just a plate number this registers a visit for today. Add a visit date to register that day instead. The outcome arrives as a Homey notification and always states the date that was actually used. This card writes to your building's real access-control system."
+        },
+        "args": [
+          {
+            "type": "device",
+            "name": "device",
+            "filter": "driver_id=visitcar"
+          },
+          {
+            "type": "text",
+            "name": "car_number",
+            "required": true,
+            "title": {
+              "ko": "차량번호",
+              "en": "Plate number"
+            },
+            "placeholder": {
+              "ko": "12가1234",
+              "en": "12가1234"
+            }
+          },
+          {
+            "type": "date",
+            "name": "visit_date",
+            "required": false,
+            "title": {
+              "ko": "방문 예정일 (비우면 오늘)",
+              "en": "Visit date (empty = today)"
+            }
+          }
+        ],
+        "id": "register_visitor"
+      }
+    ]
+  },
+  "drivers": [
+    {
+      "name": {
+        "ko": "아이파킹 주차장",
+        "en": "iParking parking lot"
+      },
+      "class": "sensor",
+      "capabilities": [
+        "iparking_park_name"
+      ],
+      "platforms": [
+        "local"
+      ],
+      "connectivity": [
+        "cloud"
+      ],
+      "images": {
+        "small": "/drivers/visitcar/assets/images/small.png",
+        "large": "/drivers/visitcar/assets/images/large.png",
+        "xlarge": "/drivers/visitcar/assets/images/xlarge.png"
+      },
+      "pair": [
+        {
+          "id": "start"
+        },
+        {
+          "id": "list_devices",
+          "template": "list_devices",
+          "navigation": {
+            "next": "add_devices"
+          }
+        },
+        {
+          "id": "add_devices",
+          "template": "add_devices"
+        }
+      ],
+      "repair": [
+        {
+          "id": "reconnect"
+        }
+      ],
+      "id": "visitcar"
+    }
+  ],
+  "capabilities": {
+    "iparking_park_name": {
+      "type": "string",
+      "title": {
+        "ko": "주차장",
+        "en": "Parking lot"
+      },
+      "getable": true,
+      "setable": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/capabilities/parking.svg"
+    }
+  }
 }

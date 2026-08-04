@@ -1,0 +1,33 @@
+{
+  "name": {
+    "ko": "아이파킹 주차장",
+    "en": "iParking parking lot"
+  },
+  "class": "sensor",
+  "capabilities": [
+    "iparking_park_name"
+  ],
+  "platforms": [
+    "local"
+  ],
+  "connectivity": [
+    "cloud"
+  ],
+  "images": {
+    "small": "/drivers/visitcar/assets/images/small.png",
+    "large": "/drivers/visitcar/assets/images/large.png",
+    "xlarge": "/drivers/visitcar/assets/images/xlarge.png"
+  },
+  "pair": [
+    { "id": "start" },
+    {
+      "id": "list_devices",
+      "template": "list_devices",
+      "navigation": { "next": "add_devices" }
+    },
+    { "id": "add_devices", "template": "add_devices" }
+  ],
+  "repair": [
+    { "id": "reconnect" }
+  ]
+}

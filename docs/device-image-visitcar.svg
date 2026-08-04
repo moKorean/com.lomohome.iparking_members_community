@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000">
+  <!-- Source graphic for drivers/visitcar/assets/images/{small,large,xlarge}.png.
+       Rasterized by scripts/make_images.py (rsvg-convert) to 75 / 500 / 1000 square.
+
+       There is no product to photograph — a paired "device" here is one parking lot at an
+       apartment complex, i.e. a row in someone's account — so this is original vector
+       artwork rather than a photo. Square with an opaque white background, per Homey's
+       driver-image guideline; the transparent line-art version is the icon, not this. -->
+  <rect width="1000" height="1000" fill="#FFFFFF"/>
+  <rect x="70" y="70" width="860" height="860" rx="150" fill="#1B4F72"/>
+
+  <!-- gate posts -->
+  <rect x="316" y="368" width="56" height="330" rx="16" fill="#FFFFFF"/>
+  <rect x="620" y="368" width="56" height="330" rx="16" fill="#FFFFFF"/>
+
+  <!-- barrier arm, raised (access granted) -->
+  <g transform="rotate(-26 344 388)">
+    <rect x="344" y="364" width="436" height="46" rx="23" fill="#FFFFFF"/>
+    <rect x="384" y="364" width="38" height="46" fill="#D64545"/>
+    <rect x="468" y="364" width="38" height="46" fill="#D64545"/>
+    <rect x="552" y="364" width="38" height="46" fill="#D64545"/>
+    <rect x="636" y="364" width="38" height="46" fill="#D64545"/>
+    <rect x="720" y="364" width="38" height="46" fill="#D64545"/>
+  </g>
+
+  <!-- car passing through -->
+  <g>
+    <path d="M484 588 q28 -66 88 -66 h48 q60 0 88 66 z" fill="#FFFFFF"/>
+    <rect x="440" y="586" width="304" height="104" rx="30" fill="#F2F2F5"/>
+    <rect x="516" y="608" width="152" height="34" rx="8" fill="#1B4F72"/>
+    <circle cx="494" cy="694" r="34" fill="#1B4F72"/>
+    <circle cx="494" cy="694" r="12" fill="#F2F2F5"/>
+    <circle cx="690" cy="694" r="34" fill="#1B4F72"/>
+    <circle cx="690" cy="694" r="12" fill="#F2F2F5"/>
+  </g>
+</svg>

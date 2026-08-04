@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iParking Visitor Parking</title>
+  <script src="/homey.js" data-origin="settings"></script>
+  <script src="form.js"></script>
+  <style>
+    :root { --brand:#0b6fd4; --bg:#f2f2f5; --card:#fff; --text:#1b1b1f; --muted:#66666e;
+            --border:#e2e2e8; --ok:#1e8449; --warn:#b9770e; --err:#c0392b; }
+    * { box-sizing: border-box; }
+    html, body { background: var(--bg) !important; }
+    body { margin:0; color:var(--text); font-size:14px; line-height:1.5;
+           font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .wrap { max-width:560px; margin:0 auto; padding:16px 16px 40px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:10px;
+            padding:16px; margin-bottom:14px; }
+    h2 { font-size:17px; margin:0 0 6px; }
+    p { margin:0 0 10px; color:var(--muted); }
+    label { display:block; font-weight:600; margin:12px 0 4px; font-size:13px; }
+    input, select { width:100%; padding:9px; font-size:15px; border:1px solid var(--border);
+                    border-radius:6px; background:#fff; color:var(--text); }
+    button { padding:10px 18px; border:0; border-radius:6px; background:var(--brand);
+             color:#fff; font-size:15px; cursor:pointer; }
+    .buttons { display:flex; gap:8px; margin-top:16px; align-items:stretch; }
+    .buttons button { flex:1 1 0; min-width:0; margin:0; padding:10px 6px; font-size:13px;
+                      line-height:1.25; text-align:center; white-space:normal; word-break:keep-all; }
+    button.ghost { background:#eeeef2; color:var(--text); }
+    button.danger { background:#c0392b; color:#fff; }
+    button.tiny { padding:5px 10px; font-size:12px; }
+    button[disabled] { opacity:.55; cursor:default; }
+    .hint { font-size:12px; color:var(--muted); margin:4px 0 0; }
+    .msg { margin-top:13px; font-size:13px; white-space:pre-wrap; }
+    .msg.ok { color:var(--ok); } .msg.err { color:var(--err); } .msg.warn { color:var(--warn); }
+    .banner { display:none; margin:0 0 12px; padding:10px 12px; border-radius:8px; font-size:13px; }
+    .banner.show { display:block; }
+    .banner.ok { background:#e8f5ec; color:var(--ok); border:1px solid #bfe3ca; }
+    .banner.warn { background:#fdf4e3; color:var(--warn); border:1px solid #f0dcb0; }
+    .banner.err { background:#fdecea; color:var(--err); border:1px solid #f5c6c0; }
+    .notice { background:#fdf4e3; border:1px solid #f0dcb0; color:#6b4c07; }
+    .notice h2 { font-size:14px; }
+    .notice p { color:#6b4c07; margin:0; font-size:12.5px; }
+    fieldset { border:0; margin:0; padding:0; }
+    fieldset[disabled] { opacity:.5; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { text-align:left; padding:7px 6px; border-bottom:1px solid var(--border);
+             vertical-align:middle; }
+    th { font-size:12px; color:var(--muted); font-weight:600; }
+    td.act { text-align:right; width:1%; white-space:nowrap; }
+    tr.inactive td { color:var(--muted); text-decoration:line-through; }
+    tr.inactive td.act { text-decoration:none; }
+    .tablewrap { overflow-x:auto; margin-top:10px; }
+    .pager { display:flex; gap:8px; align-items:center; justify-content:space-between;
+             margin-top:10px; font-size:12px; color:var(--muted); }
+    .pager button { padding:5px 10px; font-size:12px; }
+    .row { display:flex; gap:8px; align-items:flex-end; }
+    .row > div { flex:1 1 0; min-width:0; }
+    .head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- Transport disclosure. First thing on the page on purpose: it states what registering
+         here actually does (acts on a real building's access control) and it keeps the
+         asymmetry precise — the password does travel over verified TLS; it is the vendor's API
+         host that 301s everything else down to cleartext. -->
+    <div class="card notice">
+      <h2 data-i18n="noticeHeading">Before you start</h2>
+      <p data-i18n="cleartextNotice"></p>
+    </div>
+
+    <!-- 1. Account -->
+    <div class="card">
+      <h2 data-i18n="accountTitle">iParking account</h2>
+      <div id="acct-banner" class="banner"></div>
+      <p data-i18n="accountIntro"></p>
+      <label data-i18n="id">Account ID</label>
+      <input id="username" type="text" autocomplete="username" spellcheck="false">
+      <label data-i18n="pw">Password</label>
+      <input id="password" type="password" autocomplete="current-password">
+      <div class="buttons">
+        <button id="save" data-i18n="save">Sign in &amp; save</button>
+        <button id="test" class="ghost" data-i18n="test">Test connection</button>
+        <button id="clear" class="danger" data-i18n="clear">Remove account</button>
+      </div>
+      <div id="acct-msg" class="msg"></div>
+    </div>
+
+    <!-- 2. 방문차량 등록 -->
+    <div class="card">
+      <h2 data-i18n="registerTitle">Register a visitor vehicle</h2>
+      <div id="reg-banner" class="banner"></div>
+      <p data-i18n="registerIntro"></p>
+      <fieldset id="reg-fields">
+        <label data-i18n="lot">Parking lot</label>
+        <select id="lot"></select>
+        <label data-i18n="plate">Plate number</label>
+        <input id="plate" type="text" spellcheck="false" autocomplete="off" inputmode="text">
+        <p id="plate-hint" class="hint"></p>
+        <label data-i18n="visitDate">Visit date</label>
+        <input id="visit-date" type="date">
+        <p id="date-hint" class="hint"></p>
+        <div class="buttons">
+          <button id="register" data-i18n="registerBtn">Register</button>
+        </div>
+      </fieldset>
+      <div id="reg-msg" class="msg"></div>
+    </div>
+
+    <!-- 3. 등록 내역 -->
+    <div class="card">
+      <div class="head">
+        <h2 data-i18n="historyTitle">Registration history</h2>
+        <button id="refresh" class="ghost tiny" data-i18n="refreshBtn">Refresh</button>
+      </div>
+      <p data-i18n="historyIntro"></p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="colDate">Visit date</th>
+              <th data-i18n="colPlate">Plate</th>
+              <th data-i18n="colStatus">Status</th>
+              <th data-i18n="colLot">Parking lot</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="prev" class="ghost" data-i18n="prev">Prev</button>
+        <span id="page-of"></span>
+        <button id="next" class="ghost" data-i18n="next">Next</button>
+      </div>
+      <div id="hist-msg" class="msg"></div>
+    </div>
+
+  </div>
+
+  <script>
+    /*
+     * Wiring only. Every verdict — is the account permitted, is this row cancellable, was that
+     * register uncertain, what does a `yyyy-mm-dd` bound come from — lives in `form.js`, which
+     * touches no DOM so the v0.1.1 dashboard widget can mount the same module. If you find
+     * yourself about to write an `if` about the vendor's data here, it belongs there.
+     */
+    "use strict";
+
+    var F = typeof window !== "undefined" ? window.IparkingForm : null;
+    var H = null;
+    var C = null;                 // form.js controller
+    var LANG = "ko";              // default Korean; corrected once Homey reports the viewer's
+    var started = false;
+    var busy = false;             // one action at a time — this page performs real writes
+
+    function t(key, params) { return F ? F.t(LANG, key, params) : key; }
+
+    function el(id) { return document.getElementById(id); }
+
+    function applyI18n() {
+      var nodes = document.querySelectorAll("[data-i18n]");
+      for (var i = 0; i < nodes.length; i++) {
+        nodes[i].textContent = t(nodes[i].getAttribute("data-i18n"));
+      }
+      el("plate-hint").textContent = t("plateHint");
+      renderDateHint();
+      renderPager();
+    }
+
+    function msg(id, text, cls) {
+      var m = el(id);
+      m.textContent = text || "";
+      m.className = "msg " + (cls || "");
+    }
+
+    function banner(id, text, cls) {
+      var b = el(id);
+      if (!text) { b.className = "banner"; b.textContent = ""; return; }
+      b.textContent = text;
+      b.className = "banner show " + (cls || "");
+    }
+
+    /*
+     * `Homey.api` is promise-based on current builds and callback-style on older ones, and the
+     * whole page hangs if you wait on the one it isn't. Support both, and take the timeout as a
+     * parameter rather than fixing it: `POST /register` legitimately runs up to 45 s (a 20 s
+     * write budget plus a *fresh* 25 s recovery re-query), and abandoning it at 20 s would
+     * manufacture an "uncertain" outcome out of a request that was about to answer.
+     *
+     * A GET carries its parameters **twice** — in the query string (built by
+     * `IparkingForm.historyPath`) and in the body — because there is no ground truth for which
+     * of the two this firmware hands to a Python handler, and `api._query()` reads either. The
+     * cost of guessing wrong is not an error: the history table just renders empty, which looks
+     * exactly like an account with no registrations.
+     */
+    function api(method, path, body, timeout) {
+      return new Promise(function (resolve, reject) {
+        var settled = false;
+        function ok(result) { if (!settled) { settled = true; resolve(result); } }
+        function fail(err) {
+          if (settled) return;
+          settled = true;
+          reject(err instanceof Error ? err : new Error(F ? F.describe(err, LANG) : String(err)));
+        }
+        var args = [method, path, body || {}];
+        var maybe;
+        try {
+          maybe = H.api.apply(H, args.concat([function (err, result) {
+            if (err) fail(err); else ok(result);
+          }]));
+        } catch (e) {
+          return fail(e);
+        }
+        if (maybe && typeof maybe.then === "function") maybe.then(ok, fail);
+        setTimeout(function () {
+          fail(new Error("Homey.api did not respond (" + method + " " + path + ")"));
+        }, timeout || (F ? F.TIMEOUTS["default"] : 20000));
+      });
+    }
+
+    function lock(on) {
+      busy = on;
+      ["save", "test", "clear", "register", "refresh", "prev", "next"].forEach(function (id) {
+        var b = el(id);
+        if (b) b.disabled = on;
+      });
+      if (!on) { applyPermission(); renderPager(); }
+    }
+
+    // --- register card gating --------------------------------------------------
+
+    /*
+     * `can_register` has three values and this renders three states. `null` is not `false`:
+     * `null` normally means no account is saved yet, so it gets a neutral hint, while `false`
+     * is the building office refusing and gets the banner telling the user to contact them.
+     * Collapsing the two would send a user who simply hasn't signed in yet down to the
+     * management office.
+     */
+    function applyPermission() {
+      var verdict = C ? C.permission() : "unknown";
+      var fields = el("reg-fields");
+      var deny = verdict === "denied";
+      fields.disabled = deny;
+      if (deny) fields.setAttribute("disabled", "disabled");
+      else fields.removeAttribute("disabled");
+      el("register").disabled = deny || busy;
+      if (deny) banner("reg-banner", t("notPermitted"), "err");
+      else if (verdict === "unknown") banner("reg-banner", t("permissionUnknown"), "warn");
+      else banner("reg-banner", "");
+    }
+
+    // --- lot selector ---------------------------------------------------------
+
+    function renderLots() {
+      var select = el("lot");
+      var lots = C.state.lots;
+      select.innerHTML = "";
+      if (!lots.length) {
+        msg("hist-msg", t(C.state.status && C.state.status.configured ? "noLots" : "notConfigured"), "warn");
+        return;
+      }
+      lots.forEach(function (lot) {
+        var option = document.createElement("option");
+        option.value = String(lot.lot_id);
+        option.textContent = lot.park_name || String(lot.lot_id);
+        select.appendChild(option);
+      });
+      var current = C.selectedLot();
+      if (current) select.value = String(current.lot_id);
+    }
+
+    // --- date input ------------------------------------------------------------
+
+    /*
+     * `min`, `value` and `max` all come from `/status`; `new Date()` is never consulted. "Today"
+     * here means today at a parking lot in Korea, which is the only thing the vendor's server
+     * accepts, and an `<input type="date">` value is a bare wall-clock `yyyy-mm-dd` with no
+     * timezone — so a KST bound is correct for a viewer in any timezone.
+     */
+    function applyDateBounds() {
+      var bounds = C.dateBounds();
+      var input = el("visit-date");
+      if (bounds.min) input.min = bounds.min;
+      if (bounds.max) input.max = bounds.max;
+      if (bounds.min && !input.value) input.value = bounds.value;
+      renderDateHint();
+    }
+
+    function renderDateHint() {
+      if (!C) return;
+      var bounds = C.dateBounds();
+      el("date-hint").textContent = bounds.days === null ? "" : t("dateHint", { days: bounds.days });
+    }
+
+    // --- history table ---------------------------------------------------------
+
+    function renderHistory() {
+      var view = C.pageRows();
+      var body = el("history-body");
+      body.innerHTML = "";
+      view.rows.forEach(function (row) {
+        var tr = document.createElement("tr");
+        if (!row.is_active) tr.className = "inactive";
+        [row.invitation_date_human || row.invitation_date || "",
+         row.car_number || "",
+         C.statusLabel(row.status),
+         row.park_name || ""].forEach(function (text) {
+          var td = document.createElement("td");
+          td.textContent = text;
+          tr.appendChild(td);
+        });
+        var act = document.createElement("td");
+        act.className = "act";
+        // Keyed on `is_active`, never on the row being present: cancelling flips `inot_status`
+        // to CANCEL and leaves the row in the list, so presence says nothing about whether
+        // this is still a live access grant.
+        if (F.rowIsCancellable(row)) {
+          var button = document.createElement("button");
+          button.className = "danger tiny";
+          button.textContent = t("cancelBtn");
+          button.addEventListener("click", function () { onCancel(row); });
+          act.appendChild(button);
+        }
+        tr.appendChild(act);
+        body.appendChild(tr);
+      });
+      if (!view.total) {
+        var empty = document.createElement("tr");
+        var cell = document.createElement("td");
+        cell.colSpan = 5;
+        cell.style.color = "var(--muted)";
+        cell.textContent = t("historyEmpty");
+        empty.appendChild(cell);
+        body.appendChild(empty);
+      }
+      renderPager(view);
+    }
+
+    function renderPager(view) {
+      if (!C) return;
+      var v = view || C.pageRows();
+      el("page-of").textContent = t("pageOf", { page: v.page, pages: v.pages, total: v.total });
+      el("prev").disabled = busy || v.page <= 1;
+      el("next").disabled = busy || v.page >= v.pages;
+    }
+
+    // --- actions ---------------------------------------------------------------
+
+    function refreshHistory() {
+      if (!C.selectedLot()) { renderHistory(); return Promise.resolve(); }
+      msg("hist-msg", t("loading"));
+      return C.loadHistory().then(function (res) {
+        renderHistory();
+        msg("hist-msg", res && res.ok ? "" : C.messageOf(res), res && res.ok ? "" : "err");
+      }, function (err) {
+        msg("hist-msg", C.describe(err), "err");
+      });
+    }
+
+    function refreshAll() {
+      return C.loadStatus().then(function (status) {
+        el("username").value = status.username || "";
+        if (status.configured) banner("acct-banner", t("statusSaved"), "ok");
+        else banner("acct-banner", t("notConfigured"), "warn");
+        applyDateBounds();
+        applyPermission();
+        if (!status.configured) { renderLots(); renderHistory(); return null; }
+        if (status.ok === false) msg("acct-msg", C.messageOf(status), "err");
+        return C.loadLots().then(function (res) {
+          renderLots();
+          applyPermission();
+          if (res && res.ok === false) msg("hist-msg", C.messageOf(res), "err");
+          return refreshHistory();
+        }, function (err) {
+          msg("hist-msg", C.describe(err), "err");
+        });
+      }, function (err) {
+        msg("acct-msg", C.describe(err), "err");
+      });
+    }
+
+    function onSave() {
+      var user = el("username").value.trim();
+      var pass = el("password").value;
+      if (!user || !pass) { msg("acct-msg", t("need"), "err"); return; }
+      lock(true);
+      msg("acct-msg", t("saving"));
+      api("POST", "/credentials", { username: user, password: pass }).then(function (res) {
+        if (res && res.ok) {
+          msg("acct-msg", t("saved") + " " + t("savedLots", { lots: res.stores || 0 }), "ok");
+          el("password").value = "";
+          return refreshAll();
+        }
+        msg("acct-msg", C.messageOf(res), "err");
+      }, function (err) {
+        msg("acct-msg", C.describe(err), "err");
+      }).then(function () { lock(false); });
+    }
+
+    function onTest() {
+      lock(true);
+      msg("acct-msg", t("testing"));
+      api("GET", "/check-connection").then(function (res) {
+        if (res && res.ok) msg("acct-msg", t("testOk", { lots: res.lots || 0 }), "ok");
+        else msg("acct-msg", C.messageOf(res), "err");
+      }, function (err) {
+        msg("acct-msg", C.describe(err), "err");
+      }).then(function () { lock(false); });
+    }
+
+    function onClear() {
+      lock(true);
+      api("POST", "/credentials-clear", {}).then(function () {
+        el("username").value = "";
+        el("password").value = "";
+        msg("acct-msg", t("cleared"), "ok");
+        msg("reg-msg", "");
+        return refreshAll();
+      }, function (err) {
+        msg("acct-msg", C.describe(err), "err");
+      }).then(function () { lock(false); });
+    }
+
+    /*
+     * Echo the normalized plate back into the input on blur.
+     *
+     * This is a requirement, not a nicety: the vendor's own site just rejects `12가 4567`
+     * without ever saying that the space is the problem. Showing the user their input turn into
+     * `12가4567` is what makes requirement 7 observable instead of merely implemented. The note
+     * only appears when normalization actually changed something.
+     */
+    function onPlateBlur() {
+      var input = el("plate");
+      var raw = input.value;
+      var normalized = F.normalizePlate(raw);
+      input.value = normalized;
+      if (normalized && normalized !== raw) {
+        msg("reg-msg", t("plateStripped", { plate: normalized }), "warn");
+      }
+    }
+
+    function onRegister() {
+      var input = el("plate");
+      input.value = F.normalizePlate(input.value);
+      lock(true);
+      msg("reg-msg", t("registering"));
+      C.register({ carNumber: input.value, visitDate: el("visit-date").value })
+        .then(function (verdict) {
+          renderHistory();
+          if (verdict.state === "ok") {
+            input.value = "";
+            var text = verdict.message;
+            // `ambiguous` means the date string could be read two ways (a Flow `date` arg in
+            // mm-dd-yyyy is shape-identical to dd-mm-yyyy). Say which day was used, so a
+            // misparse is caught here rather than at a closed gate.
+            if (verdict.response && verdict.response.ambiguous) {
+              text += "\n" + t("dateAmbiguous", { date: verdict.response.date || "" });
+            }
+            msg("reg-msg", text, "ok");
+          } else if (verdict.state === "already") {
+            msg("reg-msg", verdict.message, "warn");
+          } else if (verdict.state === "uncertain") {
+            // Its own state, neither success nor failure — and deliberately no retry
+            // affordance of any kind. A retry is what turns one uncertain registration into
+            // two real ones at a building.
+            msg("reg-msg", t("uncertainHeading") + "\n" + verdict.message, "err");
+          } else {
+            msg("reg-msg", verdict.message, "err");
+          }
+        })
+        .then(function () { lock(false); });
+    }
+
+    function onCancel(row) {
+      if (!window.confirm(t("cancelConfirm"))) return;
+      lock(true);
+      msg("hist-msg", t("cancelling"));
+      C.cancel(row.invt_seq).then(function (res) {
+        renderHistory();
+        if (res && res.ok) msg("hist-msg", t("cancelOk"), "ok");
+        else msg("hist-msg", C.messageOf(res), "err");
+      }, function (err) {
+        renderHistory();
+        msg("hist-msg", C.describe(err), "err");
+      }).then(function () { lock(false); });
+    }
+
+    // --- boot ------------------------------------------------------------------
+
+    /*
+     * `Homey.language` is only set once i18n has loaded and `getLanguage()` returns a Promise on
+     * current builds — comparing its return value directly compares against a Promise and always
+     * falls through to English. Walk all three shapes. (Learned the hard way in
+     * `com.lomohome.localthings/settings/index.html`.)
+     */
+    function resolveLanguage() {
+      return new Promise(function (resolve) {
+        var done = function (value) {
+          LANG = F.pickLanguage(typeof value === "string" ? value : "ko");
+          resolve(LANG);
+        };
+        try {
+          if (typeof H.language === "string" && H.language) return done(H.language);
+          var maybe = H.getLanguage && H.getLanguage(function (err, value) {
+            done(err ? null : value);
+          });
+          if (maybe && typeof maybe.then === "function") return maybe.then(done, function () { done(null); });
+          if (typeof maybe === "string") return done(maybe);
+        } catch (e) { /* fall through to the default */ }
+        setTimeout(function () { resolve(LANG); }, 3000);
+      });
+    }
+
+    /*
+     * `homey.js` defines a global `Homey` *constructor* up front and only replaces it with the
+     * ready instance right before calling `onHomeyReady`. Latching onto the global on sight grabs
+     * the constructor, which has neither `.ready()` nor `.api()` — and once latched, the real
+     * `onHomeyReady` is ignored and Homey's loading overlay never goes away. Check for the
+     * methods, not the name.
+     */
+    function usable(obj) {
+      return !!obj && typeof obj.ready === "function" && typeof obj.api === "function";
+    }
+
+    function init(homeyObj) {
+      if (started) return;
+      var candidate = homeyObj || (typeof Homey !== "undefined" ? Homey : null);
+      if (!usable(candidate)) return;
+      if (!el("register")) return;                       // DOM not up yet
+      started = true;
+      H = candidate;
+
+      if (!F) {
+        // form.js failed to load. Say so instead of leaving three dead cards: without the
+        // module there is no logic on this page at all.
+        banner("acct-banner", "The settings page failed to load (form.js).", "err");
+        try { H.ready(); } catch (e) { /* ignore */ }
+        return;
+      }
+
+      C = F.createController({ api: api, lang: LANG });
+      applyI18n();
+      wire();
+      try { H.ready(); } catch (e) { /* ignore */ }
+
+      resolveLanguage().then(function () {
+        C.setLanguage(LANG);
+        applyI18n();
+        // Homey's Python i18n resolves the *app's* language, not this viewer's, so the
+        // sentences `api.py` renders would all fall back to English without this. The webview
+        // is the only thing that knows.
+        api("POST", "/language", { language: LANG }).catch(function () { /* cosmetic */ });
+        return refreshAll();
+      });
+    }
+
+    function wire() {
+      el("save").addEventListener("click", onSave);
+      el("test").addEventListener("click", onTest);
+      el("clear").addEventListener("click", onClear);
+      el("register").addEventListener("click", onRegister);
+      el("refresh").addEventListener("click", function () { refreshHistory(); });
+      el("plate").addEventListener("blur", onPlateBlur);
+      el("lot").addEventListener("change", function () {
+        C.selectLot(this.value);
+        applyPermission();
+        refreshHistory();
+      });
+      el("prev").addEventListener("click", function () { C.setPage(C.state.page - 1); renderHistory(); });
+      el("next").addEventListener("click", function () { C.setPage(C.state.page + 1); renderHistory(); });
+    }
+
+    // The init contract varies by Homey version, so trigger through every mechanism and let the
+    // `started` guard collapse the duplicates. Relying on one callback is what renders the page
+    // blank when that one does not fire.
+    function onHomeyReady(homeyObj) { init(homeyObj); }
+    document.addEventListener("DOMContentLoaded", function () { init(); });
+    window.addEventListener("load", function () { init(); });
+    (function poll(n) {
+      if (started || n <= 0) return;
+      init();
+      setTimeout(function () { poll(n - 1); }, 100);
+    })(60);
+  </script>
+</body>
+</html>

@@ -25,6 +25,8 @@
   "past_date": "The visit date must be today or later.",
   "bad_date": "That visit date could not be read. Use yyyy-mm-dd or dd-mm-yyyy.",
   "date_too_far": "The visit date must be within {days} days from today.",
+  "flow_registered": "{plate} · registered for {date}",
+  "flow_already_registered": "{plate} · {date} is already registered",
   "date_resolved": "Registered for {date}.",
   "date_ambiguous": "Your date was read as {date}. If that is not the day you meant, cancel it and register again.",
   "write_budget": "Too many register/cancel requests in the last hour. Try again later.",
