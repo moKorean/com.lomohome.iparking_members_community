@@ -38,5 +38,9 @@
   "0.1.9": {
     "ko": "기기 화면에 센서가 넷 늘었습니다 — 내일 방문 예정, 이번 주 방문 예정(오늘부터 7일), 현재 주차 중, 다음 방문 예정. 다섯 개 모두 기존과 같은 조회 한 건에서 나오므로 요청 수는 그대로입니다. \"현재 주차 중\"은 지금 단지에 들어와 있는 방문 차량이며, 1시간마다 조회하므로 최대 1시간 늦게 반영되고 그 사이에 들어왔다 나간 방문은 표시되지 않습니다.",
     "en": "Four more sensors on the device tile: expected tomorrow, expected this week (the next seven days from today), parked now, and next visit. All five come from the same single read, so the number of requests is unchanged. \"Parked now\" counts visitor vehicles currently inside the complex; it is read hourly, so it can be up to an hour behind and will miss a visit that starts and ends between two reads."
+  },
+  "0.2.0": {
+    "ko": "앱스토어 배포를 준비했습니다. 설치 전에 알아야 할 것들을 안내에 정리했습니다 — 등록은 실제 단지의 출입통제 시스템에 즉시 반영된다는 점, 아이파킹이 공개한 적 없는 API를 쓰는 비공식 앱이라 예고 없이 멈출 수 있다는 점, 로그인 이후 통신이 암호화되지 않는다는 점입니다. 계정 정보는 사용자 기기에만 저장되며 아이파킹 서버 외의 어디로도 전송되지 않고, 이 앱은 분석·수집을 하지 않습니다.",
+    "en": "Prepared for the App Store. The things to know before installing are now stated up front: a registration takes effect on your building's real access-control system immediately; this is an unofficial client for an API iParking has never published, so it can stop working without notice; and traffic after sign-in is not encrypted. Your credentials stay on your own device, go nowhere but iParking's servers, and the app performs no analytics."
   }
 }

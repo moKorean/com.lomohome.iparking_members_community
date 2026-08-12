@@ -12,30 +12,35 @@ built by reverse-engineering the site's undocumented web bundles — see
 
 > 한국어 README는 [`README.md`](./README.md)를 참고하세요.
 
-## ⚠️ Personal use only — which is why it is not on the App Store
+## Before you install
 
-**This app was written for the author's own household, for personal use.** Using it requires
-your **own unit's account** at a building enrolled in iParking MEMBERS. One account belongs
-to one unit, and it can only register visitors coming to that unit.
+This app needs **your own unit's account at a building enrolled in iParking MEMBERS**. One
+account belongs to one unit and can only register visitors coming to that unit. If that is not
+you, there is nothing here to use.
 
-So it is **not published to the Homey App Store**. It is installed directly with
-`homey app install`. The reasons, in order:
+And this app moves a **real barrier gate**, not a document. Four things to know first:
 
-1. **It is a personal-use app to begin with.** It was never built for distribution. The only
-   people who *can* use it are those with their own unit's account at an iParking building,
-   so there is effectively no store audience to reach.
-2. It speaks iParking's **unofficial, private API** and embeds the vendor's encryption key as
-   a source literal. The vendor may well not want that, and store review could reasonably
-   object to it.
-3. It **writes to a real apartment building's physical access-control system** — not the kind
-   of behaviour that belongs in broad distribution.
+1. **A registration takes effect on a real building's access-control system, immediately.** Do
+   not enter an arbitrary plate to see what happens — that vehicle really is granted entry.
+2. **Sign in with your own account, and register only visitors coming to you.** Nothing here
+   technically prevents otherwise; that is not the same as it being acceptable.
+3. **This is an unofficial client.** It was built by observing an internal API iParking has
+   never published. **The vendor can change it and break this app without notice**, and can
+   block this client. iParking is not affiliated with this app and owes it no support — if
+   something breaks, raise an issue on this repository rather than contacting your building
+   office or iParking.
+4. **Traffic after sign-in is not encrypted**, because iParking's API server redirects every
+   HTTPS request down to plain HTTP. The [disclosures](#what-you-should-know-before-using-this-disclosures)
+   below say exactly what travels in the clear. The password itself does go over verified TLS.
 
-See [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) for the full reasoning, and for which
-parts of the release process apply under self-install and which do not.
+**What it does not do**, stated as plainly: it sends your credentials nowhere but iParking's
+own servers, performs no analytics, telemetry or remote logging, and runs no server that
+anyone — the author included — could reach. Your ID and password live only on your own Homey.
+The access token is held **in memory only** and never persisted, so it cannot reach a hub
+backup.
 
-**If you use it:** sign in with your own account and register only visitors coming to your
-own home. Do not use someone else's credentials, and do not register vehicles unrelated to
-you. A registration takes effect on a real barrier gate.
+The distribution decision and its reasoning are in
+[`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md).
 
 ## What you should know before using this (disclosures)
 
@@ -151,7 +156,7 @@ Verified against: a Homey Pro (firmware 13.x), Python runtime 3.14, one iParking
 
 ## Setup
 
-1. Install the app on your Homey (`homey app install`).
+1. Install from the Homey App Store, or from source with `homey app install`.
 2. Open the **app settings** and sign in with your iParking MEMBERS account.
 3. Add a device → **iParking Visitor Parking** → pick the lot tied to your account.
 4. From the app settings page, enter a plate number and visit date to register, and

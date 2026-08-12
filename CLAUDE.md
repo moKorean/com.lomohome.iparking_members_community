@@ -21,16 +21,27 @@ are real Korean.
   `한글 만들자` (or pipe text in on stdin). Note it transliterates *every* mapped letter, so
   literal English words/filenames mixed into a sentence get transliterated too.
 
-## Distribution — self-install, not the App Store
+## Distribution — App Store bound (reversed 2026-08-12)
 
-**This app is not published.** It is installed directly with `homey app install`. See
-[`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) for the full reasoning and for exactly
-which parts of navien's 배포 protocol carry over (version bump, bilingual changelog,
-refreshed READMEs) and which don't (`homey app publish`, store-text scrubbing, widget store
-assets — none of them apply here). Because there is no submission, `README.txt`/
-`README.ko.txt` are produced for parity with the sibling app but are **not** load-bearing:
-`homey app validate --level publish` does not check for their existence at all — that
-constraint belongs to `homey app publish`, which this app's release process never runs.
+**This app is being prepared for the Homey App Store.** It was self-install only until
+2026-08-12; see [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) for what changed and what
+did not. In short: the "audience is one apartment unit" argument was wrong — the requirement
+is *an* iParking MEMBERS account, not *this* one — while the other two original objections
+(an unofficial private API with the vendor's key as a source literal; writes to a real
+building's access control) still stand and are being carried into review rather than
+argued away.
+
+Three consequences for anything you edit here:
+
+- **`README.txt` / `README.ko.txt` are store copy and are load-bearing again.** They are
+  written for a stranger, not the maintainer, and must contain **no occurrence of "Homey"** —
+  the App Store rejects the word in store-facing text (app name, description, changelog, these
+  two files). `README.md` / `README.en.md` are GitHub docs and may use it freely.
+- **The READMEs open with public-release cautions, not a personal-use notice.** A stranger has
+  to learn *before installing* that this moves a real gate, that it is unofficial and can break
+  without notice, and what travels in cleartext. Do not soften those into marketing.
+- **`homey app publish` is outward-facing** — it starts a review — so it runs only on the
+  maintainer's explicit instruction, never as the tail of an ordinary change.
 
 ## Layout
 
@@ -199,18 +210,20 @@ homey app run                        # dev mode with live logs (diagnose pairing
 uv run pytest -q                     # unit tests for the pure client (iparking_lib/iparking/*)
 ```
 
-**"배포" (deploy)** carries over from navien's protocol only in part — bump `version` in
+**"배포" (deploy)** now matches navien's protocol in full — bump `version` in
 `.homeycompose/app.json`, add a KO+EN `.homeychangelog.json` entry, refresh
-`README.md`/`README.en.md`, commit + push, then `homey app install`. It does **not** include
-`homey app publish` (never run for this app) or store-text scrubbing (`README.txt`/
-`README.ko.txt` may say "Homey" freely — no store review reads them). See
-`docs/DISTRIBUTION.md` for the full table. Never add a `Co-Authored-By: Claude ...` trailer
-to commits.
+`README.md`/`README.en.md` (and `README.txt`/`README.ko.txt` if the store copy changed),
+commit + push, then `homey app install`. **`homey app publish` is a separate, explicit step**
+(guidelines: `y`, "update version?": `n`) and is never run as the tail of an ordinary change —
+it starts an external review. Store-text scrubbing applies: `README.txt`/`README.ko.txt` must
+contain no "Homey". See `docs/DISTRIBUTION.md`. Never add a `Co-Authored-By: Claude ...`
+trailer to commits.
 
 ## Status
 
-v0.1.0 is under active development toward the acceptance criteria tracked by the
-maintainer's planning workspace (outside this repo). `docs/RECON.md` is the verified API
-contract; `docs/PROBE.md` (once item 3 lands) will record the two write endpoints
-(`POST /invitations`, `DELETE /invitations/{seq}`) exercised live, once, against the
-maintainer's own account.
+v0.1.9. `docs/RECON.md` is the verified API contract and `docs/PROBE.md` records the two write
+endpoints (`POST /invitations`, `DELETE /invitations/{seq}`) exercised live, once, against the
+maintainer's own account. Verified on hardware: sign-in, the 오늘 방문 예정 count, registration
+from the settings page, history and its two-press cancel, and the 자주 오는 차량 buttons. Not
+yet watched on a real lot: the four sensors added in v0.1.9, and the Flow `date` argument's
+field order (mitigated — the success notification echoes the date that was used).
