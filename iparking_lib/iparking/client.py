@@ -273,18 +273,30 @@ def count_registered_on(rows, api_date: str) -> int:
     return count_registered_between(rows, api_date, api_date)
 
 
-def count_registered_between(rows, start_api_date: str, end_api_date: str) -> int:
-    """`count_registered_on` over an inclusive window — 내일, 이번 주, any span.
+def active_between(rows, start_api_date: str, end_api_date: str) -> list:
+    """Uncancelled rows in an inclusive window, **soonest first**.
+
+    The one window filter in this app; `count_registered_between` is its length and the
+    visit-list Flow card is its rendering, so a day counted on the tile and a day listed in a
+    Flow can never disagree about which rows are real.
 
     String comparison, not date arithmetic: `yyyyMMdd` sorts lexicographically in calendar
     order, which is the whole reason the wire format is worth keeping as the internal one. A
-    row the vendor sent malformed compares false and is skipped rather than raising, exactly
-    as it does in the single-day case.
+    row the vendor sent malformed compares false and is skipped rather than raising.
+
+    Ties break on `invt_seq` so two visits booked for the same day keep a stable order — a
+    list that reshuffled between reads would look like the data had changed when it had not.
     """
     start, end = str(start_api_date), str(end_api_date)
-    return sum(
-        1 for row in rows if row.is_active and start <= str(row.invitation_date) <= end
+    return sorted(
+        (row for row in rows if row.is_active and start <= str(row.invitation_date) <= end),
+        key=lambda row: (str(row.invitation_date), row.invt_seq),
     )
+
+
+def count_registered_between(rows, start_api_date: str, end_api_date: str) -> int:
+    """`count_registered_on` over an inclusive window — 내일, 이번 주, any span."""
+    return len(active_between(rows, start_api_date, end_api_date))
 
 
 def parked_on(rows, api_date: str) -> list:

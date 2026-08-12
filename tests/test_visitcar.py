@@ -44,6 +44,7 @@ from iparking_lib.const import (
     CAPABILITY_TOMORROW_COUNT,
     CAPABILITY_WEEK_COUNT,
     COUNT_CAPABILITIES,
+    FLOW_LIST_VISITS,
     FLOW_REGISTER_VISITOR,
     FLOW_REGISTER_VISITOR_TODAY,
     MAX_FAVORITES,
@@ -54,6 +55,7 @@ from iparking_lib.const import (
     STORE_PARK_NAME,
     STORE_PARK_SEQ,
     STORE_STOR_SEQ,
+    VISIT_LIST_LIMIT,
     WEEK_DAYS,
     favorite_name_setting,
     favorite_plate_setting,
@@ -1481,6 +1483,178 @@ def test_lots_ok_still_describes_the_lot_these_tests_pair():
     row = lots_ok()["resultData"][0]
 
     assert {key: row[key] for key in _row()} == _row()
+
+
+# --- list_visits: the one Flow card that reads -------------------------------
+#
+# Two modes on one optional date, mirroring the register cards. Nothing here writes, so the
+# assertions are about *what the token says* — that is the whole product of this card.
+
+
+def _input_date(api_date: str) -> str:
+    """`yyyyMMdd` -> the `yyyy-mm-dd` a Homey `date` argument carries.
+
+    Built from the wire form rather than written as a literal so these tests keep meaning
+    something on every calendar day — and it goes through the card's real parse path
+    (`dates.to_api_date`), not around it.
+    """
+    return f"{api_date[:4]}-{api_date[4:6]}-{api_date[6:]}"
+
+
+def _listed(dev, visit_date=""):
+    return asyncio.run(dev.flow_list_visits(visit_date=visit_date))
+
+
+def test_the_list_card_gathers_everything_upcoming_when_no_date_is_given(make_device):
+    today = dates.today_api()
+    api = _StubApi(history_rows=[
+        _hist(2, date=dates.shift_api(today, 5), plate=PLATE_2),
+        _hist(1, date=today, plate=PLATE),
+    ])
+    dev, _homey = make_device(api=api)
+
+    result = _listed(dev)
+
+    assert result["count"] == 2
+    # Soonest first, whatever order the vendor returned them in.
+    assert result["list"].splitlines() == [
+        f"{dates.format_kst_short(today)} {PLATE}",
+        f"{dates.format_kst_short(dates.shift_api(today, 5))} {PLATE_2}",
+    ]
+
+
+def test_the_list_card_asks_for_the_polls_own_window_when_undated(make_device):
+    """Deliberately the same span the poll uses: it is the widest a visit this app created
+    can be in, and asking for exactly it is what lets the answer refresh the tile for free."""
+    api = _StubApi(history_rows=[_hist(1)])
+    dev, _homey = make_device(api=api)
+
+    _listed(dev)
+    call = api.history_calls[-1]
+
+    today = dates.today_api()
+    assert call["start_date"] == today
+    assert call["end_date"] == dates.shift_api(today, POLL_DAYS_AHEAD)
+
+
+def test_a_date_narrows_the_list_to_that_day_alone(make_device):
+    today = dates.today_api()
+    target = dates.shift_api(today, 3)
+    api = _StubApi(history_rows=[_hist(1, date=target, plate=PLATE)])
+    dev, _homey = make_device(api=api)
+
+    result = _listed(dev, visit_date=_input_date(target))
+    call = api.history_calls[-1]
+
+    assert call["start_date"] == call["end_date"] == target
+    assert result["count"] == 1
+    assert result["list"] == f"{dates.format_kst_short(target)} {PLATE}"
+
+
+def test_a_past_date_is_listed_rather_than_refused(make_device):
+    """`to_api_date`, not `resolve_visit_date`. The not-in-the-past rule is a policy about
+    *writing* a visit; applying it to a read would refuse to answer "who came last Tuesday?"
+    for no reason at all."""
+    past = dates.shift_api(dates.today_api(), -6)
+    api = _StubApi(history_rows=[_hist(1, date=past, plate=PLATE)])
+    dev, _homey = make_device(api=api)
+
+    result = _listed(dev, visit_date=_input_date(past))
+
+    assert result["count"] == 1
+    assert PLATE in result["list"]
+
+
+def test_cancelled_rows_are_left_out_of_the_list(make_device):
+    """Same rule as the counts, and from the same function — 취소 leaves the row in place with
+    its date intact, so a list that ignored status would advertise visits that will not
+    happen."""
+    today = dates.today_api()
+    api = _StubApi(history_rows=[
+        _hist(1, date=today, plate=PLATE, status="CANCEL"),
+        _hist(2, date=today, plate=PLATE_2),
+    ])
+    dev, _homey = make_device(api=api)
+
+    result = _listed(dev)
+
+    assert result["count"] == 1
+    assert PLATE_2 in result["list"] and PLATE not in result["list"]
+
+
+def test_an_empty_list_is_a_sentence_and_never_a_blank_token(make_device):
+    """The blank-notification bug in miniature. An empty string looks like success to every
+    consumer, which is exactly how this app posted empty timeline rows for weeks."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[]))
+
+    result = _listed(dev)
+
+    assert result["count"] == 0
+    assert result["list"].strip()
+    assert result["list"] == i18n.translate("flow_list_empty", "ko")
+
+
+def test_an_empty_dated_list_names_the_day_it_was_asked_about(make_device):
+    """"없습니다" alone leaves the user wondering which day answered."""
+    target = dates.shift_api(dates.today_api(), 2)
+    dev, _homey = make_device(api=_StubApi(history_rows=[]))
+
+    result = _listed(dev, visit_date=_input_date(target))
+
+    assert dates.format_kst_short(target) in result["list"]
+
+
+def test_a_long_list_is_capped_and_says_how_many_it_left_out(make_device):
+    """Truncation that looks complete is the failure worth avoiding — this token lands in a
+    notification or a spoken sentence."""
+    today = dates.today_api()
+    rows = [
+        _hist(index, date=dates.shift_api(today, index), plate=PLATE)
+        for index in range(VISIT_LIST_LIMIT + 3)
+    ]
+    dev, _homey = make_device(api=_StubApi(history_rows=rows))
+
+    result = _listed(dev)
+    lines = result["list"].splitlines()
+
+    assert result["count"] == len(rows), "the count is the truth, not the shown length"
+    assert len(lines) == VISIT_LIST_LIMIT + 1
+    assert "3" in lines[-1]
+
+
+def test_an_undated_list_refreshes_the_tile_for_free(make_device):
+    """It fetched the poll's exact window, so the rows are already in hand."""
+    today = dates.today_api()
+    api = _StubApi(history_rows=[_hist(1, date=today), _hist(2, date=today)])
+    dev, _homey = make_device(api=api)
+    before = len(api.history_calls)
+
+    _listed(dev)
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 2
+    assert len(api.history_calls) == before + 1, "one request, and it did double duty"
+
+
+def test_a_dated_list_never_touches_the_tile(make_device):
+    """The rows for one past day say nothing about today. Feeding them to `_apply_values`
+    would compute today's count as 0 and overwrite a correct value with a confident wrong
+    one — worse than leaving it an hour stale."""
+    today = dates.today_api()
+    past = dates.shift_api(today, -6)
+    api = _StubApi(history_rows=[_hist(1, date=today), _hist(2, date=today)])
+    dev, _homey = make_device(api=api)
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 2
+
+    api._history_rows = [_hist(3, date=past)]
+    _listed(dev, visit_date=_input_date(past))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 2
+
+
+def test_the_list_card_is_bound_at_driver_init(make_driver):
+    dev, homey = make_driver()
+
+    assert homey.flow.cards[("action", FLOW_LIST_VISITS)].listener is not None
 
 
 # --- 자주 오는 차량: the tile buttons -------------------------------------------

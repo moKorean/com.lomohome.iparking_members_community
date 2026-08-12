@@ -34,5 +34,8 @@
   "date_resolved": "Registered for {date}.",
   "date_ambiguous": "Your date was read as {date}. If that is not the day you meant, cancel it and register again.",
   "write_budget": "Too many register/cancel requests in the last hour. Try again later.",
-  "cleartext_notice": "Unofficial client for iParking MEMBERS. Sign-in itself goes over verified HTTPS, but iParking's own API server downgrades every HTTPS request it receives to plain HTTP — that is the vendor server's behavior and cannot be fixed from this app. As a result, the access token and your plate/visit data travel over the network unencrypted after sign-in. Registering a visitor vehicle here acts on this building's real access-control system."
+  "cleartext_notice": "Unofficial client for iParking MEMBERS. Sign-in itself goes over verified HTTPS, but iParking's own API server downgrades every HTTPS request it receives to plain HTTP — that is the vendor server's behavior and cannot be fixed from this app. As a result, the access token and your plate/visit data travel over the network unencrypted after sign-in. Registering a visitor vehicle here acts on this building's real access-control system.",
+  "flow_list_empty": "No visitor vehicles are booked.",
+  "flow_list_empty_on": "No visitor vehicles are booked for {date}.",
+  "flow_list_more": "…and {count} more"
 }

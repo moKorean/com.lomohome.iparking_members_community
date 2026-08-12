@@ -1,0 +1,56 @@
+{
+  "title": {
+    "ko": "예약된 방문 차량 목록",
+    "en": "List booked visitor vehicles"
+  },
+  "titleFormatted": {
+    "ko": "[[visit_date]] 예약된 방문 차량 목록",
+    "en": "List visitor vehicles booked for [[visit_date]]"
+  },
+  "hint": {
+    "ko": "예약된 방문 차량을 글로 정리해 돌려줍니다. 날짜를 넣으면 그 날짜만, 비워 두면 오늘부터 앞으로 예약된 것을 전부 모읍니다. 결과는 태그 두 개로 나옵니다 — '목록'은 알림이나 음성으로 그대로 쓸 수 있는 글이고, '건수'는 숫자라 조건 카드에 쓸 수 있습니다. 취소된 등록은 빠집니다. 이 카드는 조회만 하며 아무것도 등록하지 않습니다.",
+    "en": "Returns the booked visitor vehicles as text. Give a date to list that day alone, or leave it empty to gather everything booked from today onwards. Two tags come back: \"List\" is text you can drop straight into a notification or a spoken sentence, and \"Count\" is a number you can test in a condition card. Cancelled registrations are left out. This card only reads — it registers nothing."
+  },
+  "args": [
+    {
+      "type": "device",
+      "name": "device",
+      "filter": "driver_id=visitcar"
+    },
+    {
+      "type": "date",
+      "name": "visit_date",
+      "required": false,
+      "title": {
+        "ko": "날짜 (비우면 앞으로 전부)",
+        "en": "Date (empty = everything upcoming)"
+      }
+    }
+  ],
+  "tokens": [
+    {
+      "name": "list",
+      "type": "string",
+      "title": {
+        "ko": "목록",
+        "en": "List"
+      },
+      "example": {
+        "ko": "8/15 토 12가1234\n8/20 목 12가1235",
+        "en": "8/15 Sat 12가1234\n8/20 Thu 12가1235"
+      }
+    },
+    {
+      "name": "count",
+      "type": "number",
+      "title": {
+        "ko": "건수",
+        "en": "Count"
+      },
+      "example": {
+        "ko": "2",
+        "en": "2"
+      }
+    }
+  ]
+}

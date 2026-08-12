@@ -115,6 +115,14 @@ The Homey app itself is © 2026 Geunwon Mo.
   decide it (`25-12-2026`, whose first field exceeds 12) the app resolves it correctly on its
   own; where they cannot, one glance at the notification's date exposes it. Worth checking the
   first time you use the date-picking card.
+- **A Flow that lists booked visits** — `list_visits` ("List booked visitor vehicles")
+  returns the bookings **as text**. Give it a date to list that day alone; leave the date
+  empty and it gathers everything booked from today onwards. Two tags come back: **List**
+  (`8/15 Sat 12가1234`, one per line) drops straight into a notification or a spoken
+  sentence, and **Count** is a number a condition card can test. With nothing booked you get
+  a sentence rather than an empty value — a blank token is how this app once posted empty
+  notifications. Cancelled registrations are left out, and past twenty entries the remainder
+  is summarised rather than silently cut. **This card only reads; it registers nothing.**
 - **Frequent-vehicle buttons (up to ten)** — the device settings hold twenty text fields:
   **frequent vehicle name 1–10** and **plate number 1–10**. Every slot where **both** halves are
   filled in and the plate validates gets its own button on the device tile — `[엄마차 방문 등록]`
@@ -151,6 +159,7 @@ a real building are two different claims.
 | Registration history · cancel (two-press) | **Verified on hardware** |
 | Frequent-vehicle buttons (20 device settings → up to 10 push buttons) | **Verified on hardware** |
 | Visitor registration (2 Flow actions) | Supported — see the note above on the date argument |
+| Listing bookings (1 Flow action) | Supported — not yet run against a real lot |
 | Multi-building / multi-lot accounts | Supported — the code handles N buildings × M lots, but the real account is 1 × 1, so only that case is verified |
 | Editing a registration (`PUT /invitations`) | Not supported — the endpoint is known but was never exercised |
 | Notifying a visitor by SMS | Not supported — as above |

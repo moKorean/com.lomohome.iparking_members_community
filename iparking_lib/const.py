@@ -248,6 +248,21 @@ FLOW_REGISTER_VISITOR = "register_visitor"
 #: gate. This card removes the field, not the behaviour. Two cards, still one write path.
 FLOW_REGISTER_VISITOR_TODAY = "register_visitor_today"
 
+#: `.homeycompose/flow/actions/list_visits.json`. **The one Flow card that reads rather than
+#: writes**, so it carries none of the register path's caution: a failed read costs a retry,
+#: not a duplicate registration at a building.
+#:
+#: Two modes on one optional `visit_date`, mirroring the register cards' shape so the two
+#: read the same way in the Flow editor — a date lists that day alone, an empty field lists
+#: everything still to come.
+FLOW_LIST_VISITS = "list_visits"
+
+#: How many visits the list card's text token names before it summarises the rest. A cap
+#: rather than none: this token lands in a notification or a spoken sentence, and forty lines
+#: there is not a list, it is a wall. The overflow is **stated** (`…외 N건`) rather than
+#: silently dropped — a truncated list that looks complete is the failure worth avoiding.
+VISIT_LIST_LIMIT = 20
+
 # --- Settings keys ----------------------------------------------------------
 #
 # The `access_token` is deliberately NOT here. It is memory-only: a 7-day credential that

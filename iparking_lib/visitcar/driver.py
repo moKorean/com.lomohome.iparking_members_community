@@ -44,6 +44,7 @@ from homey import driver
 
 from iparking_lib import compat, pairing
 from iparking_lib.const import (
+    FLOW_LIST_VISITS,
     FLOW_REGISTER_VISITOR,
     FLOW_REGISTER_VISITOR_TODAY,
     STORE_LOT_ID,
@@ -80,6 +81,7 @@ class VisitCarDriver(driver.Driver):
         for card_id, listener in (
             (FLOW_REGISTER_VISITOR, self._on_register),
             (FLOW_REGISTER_VISITOR_TODAY, self._on_register_today),
+            (FLOW_LIST_VISITS, self._on_list_visits),
         ):
             try:
                 card = compat.flow_card(self.homey, "action", card_id)
@@ -120,6 +122,20 @@ class VisitCarDriver(driver.Driver):
         return await self._target(values).flow_register(
             car_number=str(values.get("car_number") or ""),
             visit_date="",
+        )
+
+    async def _on_list_visits(self, args=None, state=None, **kwargs) -> dict:
+        """`list_visits`' run listener. **This one only reads.**
+
+        Returns the card's tokens rather than a bool, which is what makes it an advanced-flow
+        card: `FlowCardAction`'s listener is typed `None | dict`, and the dict's keys are the
+        `tokens` names in the card definition.
+        """
+        values = _values(args)
+        return await self._target(values).flow_list_visits(
+            # `""` for an empty optional date, exactly as the register card does — that empty
+            # string is the "everything upcoming" mode, not a missing argument.
+            visit_date=str(values.get("visit_date") or ""),
         )
 
     def _target(self, values: dict) -> object:

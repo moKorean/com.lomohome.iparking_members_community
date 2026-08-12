@@ -142,6 +142,7 @@ from iparking_lib.const import (
     STORE_LOT_ID,
     STORE_PARK_SEQ,
     STORE_STOR_SEQ,
+    VISIT_LIST_LIMIT,
     WEEK_DAYS,
     favorite_name_setting,
     favorite_plate_setting,
@@ -151,6 +152,7 @@ from iparking_lib.iparking import codes, dates
 from iparking_lib.iparking.client import (
     IparkingError,
     RegisterUncertain,
+    active_between,
     count_registered_between,
     next_visit,
     parked_on,
@@ -619,6 +621,83 @@ class VisitCarDevice_(device.Device):
             await self._safe_available()
 
     # --- the register path --------------------------------------------------
+
+    async def flow_list_visits(self, visit_date: str = "") -> dict:
+        """`list_visits`' whole body: booked visits as text, plus how many. **Reads only.**
+
+        Two modes on one optional argument, the same shape the register cards use:
+
+        * a date → **that day alone**, and it may be in the past. `to_api_date`, not
+          `resolve_visit_date`: the visit-date window is a policy about *writing*, and
+          refusing to *list* last Tuesday would be that policy leaking somewhere it does not
+          belong.
+        * empty → everything from today to `POLL_DAYS_AHEAD`, which is the widest span this
+          app can create a visit in, so "upcoming" means all of it.
+
+        Returns Flow tokens rather than raising on an empty result — "nothing booked" is an
+        answer, not a failure, and a Flow that errored out on a quiet week would be useless.
+
+        The upcoming mode asks for **exactly the poll's window**, so its rows also refresh
+        the tile at no extra request. The single-day mode deliberately does not: those rows
+        say nothing about today, and feeding them in would compute today's count as 0 and
+        overwrite a correct value with a confident wrong one.
+        """
+        today = dates.today_api()
+        wanted = str(visit_date or "").strip()
+        if wanted:
+            start = end = str(dates.to_api_date(wanted))
+        else:
+            start, end = today, dates.shift_api(today, POLL_DAYS_AHEAD)
+
+        if self._api is None:
+            self._api = await compat.shared_api(self.homey)
+        rows = await self._api.history(
+            park_seq=self._park_seq, stor_seq=self._stor_seq,
+            start_date=start, end_date=end,
+        )
+
+        if not wanted:
+            try:
+                await self._apply_values(rows, today)
+            except Exception as exc:
+                # A courtesy refresh riding on a read the user asked for. Its failure must not
+                # turn a working Flow card into a broken one.
+                self.log(f"iparking: the tile could not be updated from a list card: {exc}")
+
+        visits = active_between(rows, start, end)
+        language = await compat.ui_language(self.homey)
+        self.log(f"iparking: list_visits {start}~{end} -> {len(visits)}건")
+        return {
+            "list": self._format_visits(visits, language, wanted, start),
+            "count": len(visits),
+        }
+
+    def _format_visits(self, visits, language: str, wanted: str, start: str) -> str:
+        """The list token. **Never an empty string.**
+
+        A blank token is this app's most expensive past bug in miniature: v0.1.2 posted empty
+        notifications for weeks because a blank value looks like success everywhere it is
+        handled. So an empty result is a sentence, and one that names the day when a day was
+        asked for.
+
+        Every line carries its date even in single-day mode. A token whose shape depends on
+        which argument was filled in is a token a Flow has to branch on.
+        """
+        if not visits:
+            key = "flow_list_empty_on" if wanted else "flow_list_empty"
+            return i18n.translate(
+                key, language, date=dates.format_kst_short(start, language)
+            )
+
+        shown = visits[:VISIT_LIST_LIMIT]
+        lines = [
+            f"{dates.format_kst_short(row.invitation_date, language)} {row.car_number}".strip()
+            for row in shown
+        ]
+        remainder = len(visits) - len(shown)
+        if remainder:
+            lines.append(i18n.translate("flow_list_more", language, count=remainder))
+        return "\n".join(lines)
 
     async def flow_register(
         self, car_number: str, visit_date: str = "", *, label: str = ""
