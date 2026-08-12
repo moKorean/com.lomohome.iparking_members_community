@@ -2,25 +2,30 @@
 
     python3 scripts/make_images.py
 
-Resizes docs/app-image.png (2000x1400, itself rasterized from the editable
-docs/app-image.svg via `rsvg-convert`) into the exact 10:7 landscape sizes the
-Homey App Store requires: 250x175 / 500x350 / 1000x700. Needs `sips` (macOS).
+Rasterizes docs/app-image.svg straight into the exact 10:7 landscape sizes the
+Homey App Store requires: 250x175 / 500x350 / 1000x700.
+
+**Straight from the SVG, with no intermediate PNG.** It used to resize a
+hand-made docs/app-image.png, which meant the editable source and the shipped
+images could disagree and nothing would say so — and they did: after the App
+Store review rewrite, the PNG was still nine days older than the drawing it
+claimed to come from. `rsvg-convert` honours an exact pixel size, so the extra
+step bought nothing but a way to be wrong.
 
 There is no real product to photograph here (this app is a software client for
 a private API, not a controller for a physical appliance), so docs/app-image.svg
-is original vector artwork rather than a photo — but the resize step mirrors
-com.lomohome.navien's scripts/make_images.py exactly: one high-resolution
-source, resized to the required sizes by script, never hand-edited per size.
+is original vector artwork rather than a photo. The rule it keeps from
+com.lomohome.navien's script still holds: one source, every size generated from
+it, never hand-edited per size.
 
 Driver images are the same idea one shape over: square (75 / 500 / 1000) on an
-opaque white background, per Homey's driver-image guideline, rasterized straight
-from docs/device-image-<driver>.svg with `rsvg-convert` (which honours the exact
-pixel size, so there is no resize step and no intermediate PNG to keep in sync).
+opaque background, per Homey's driver-image guideline, rasterized from
+docs/device-image-<driver>.svg.
 
-assets/icon.svg, assets/capabilities/visitcar.svg and drivers/*/assets/icon.svg
-are maintained by hand — this script deliberately does NOT touch them, so it
-can't overwrite hand-drawn artwork. (`parking.svg` went with the 주차장명
-capability it was the icon for.)
+assets/icon.svg and drivers/*/assets/icon.svg are maintained by hand — this
+script deliberately does NOT touch them, so it cannot overwrite hand-drawn
+artwork. The capability icons under assets/capabilities/ are vendored from
+Material Design Icons and are not generated either; see NOTICE.
 """
 
 import subprocess
@@ -38,35 +43,26 @@ DEVICE_SIZES = {"small": 75, "large": 500, "xlarge": 1000}
 DEVICE_SOURCES = {"visitcar": "device-image-visitcar.svg"}
 
 
-def _sips(src: Path, w: int, h: int, dst: Path) -> None:
+def _rsvg(src: Path, w: int, h: int, dst: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        ["sips", "-s", "format", "png", "-z", str(h), str(w), str(src), "--out", str(dst)],
-        check=True, stdout=subprocess.DEVNULL,
-    )
-    print(f"  {dst.relative_to(ROOT)}  {w}x{h}")
-
-
-def _rsvg(src: Path, size: int, dst: Path) -> None:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["rsvg-convert", "-w", str(size), "-h", str(size), str(src), "-o", str(dst)],
+        ["rsvg-convert", "-w", str(w), "-h", str(h), str(src), "-o", str(dst)],
         check=True,
     )
-    print(f"  {dst.relative_to(ROOT)}  {size}x{size}")
+    print(f"  {dst.relative_to(ROOT)}  {w}x{h}")
 
 
 def resize_images() -> None:
     print("app store images:")
     for name, (w, h) in APP_SIZES.items():
-        _sips(DOCS / "app-image.png", w, h, ROOT / "assets/images" / f"{name}.png")
+        _rsvg(DOCS / "app-image.svg", w, h, ROOT / "assets/images" / f"{name}.png")
 
 
 def driver_images() -> None:
     print("driver images:")
     for driver_id, source in DEVICE_SOURCES.items():
         for name, size in DEVICE_SIZES.items():
-            _rsvg(DOCS / source, size,
+            _rsvg(DOCS / source, size, size,
                   ROOT / "drivers" / driver_id / "assets/images" / f"{name}.png")
 
 

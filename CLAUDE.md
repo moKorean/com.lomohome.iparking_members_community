@@ -191,6 +191,32 @@ only checked the ciphertext, so it stayed green while the document claimed one b
 to another body's envelope. That test now asserts both halves. **To change a sample plate in
 the appendix, edit `scripts/gen_aes_fixtures.sh` and re-run it** — never the document alone.
 
+## Artwork — three drawings, three jobs, all generated from SVG
+
+App Store review (2026-08-13, approved with feedback) named all three. Keep them distinct:
+
+| File | Job | Review's note |
+|---|---|---|
+| `assets/icon.svg` | identifies the **app** | was identical to the driver icon — now an apartment block with a parking sign |
+| `drivers/visitcar/assets/icon.svg` | identifies **one paired lot** on its tile | unchanged: barrier-and-car line art |
+| `docs/app-image.svg` → `assets/images/*.png` | the **store page** picture | "an illustration"; rebuilt as an apartment complex's lot at dusk with a marked visitor bay |
+| `docs/device-image-visitcar.svg` → `drivers/visitcar/assets/images/*.png` | the **device card** picture | also an illustration; now a plain P, which review suggested |
+
+**The app icon is deliberately not iParking's logo**, which is what review suggested. Every
+README states this app is unaffiliated, and shipping a third party's trademark in a published
+app is the maintainer's call, not an asset-file detail. Raise it with them rather than
+quietly adopting it.
+
+**`assets/icon.svg` must never be made identical to the driver icon again.** It was, on an
+explicit request in v0.1.3, and that is exactly what review flagged;
+`test_the_app_icon_is_not_the_driver_icon` pins the reversal.
+
+**Every PNG is generated — run `python3 scripts/make_images.py` after touching any SVG.** The
+script rasterizes the SVGs directly now. It used to resize a hand-made `docs/app-image.png`
+that could silently fall behind the drawing, and did: an edited SVG shipped as the previous
+picture for nine days. `test_the_generated_images_are_newer_than_the_art_they_come_from`
+makes forgetting the script a test failure instead of a surprise on the store page.
+
 ## Capability icons — filled paths, because Homey masks them
 
 Every capability icon lives in `assets/capabilities/mdi-*.svg` and comes from **Material Design

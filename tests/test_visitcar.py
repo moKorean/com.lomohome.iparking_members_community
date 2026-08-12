@@ -1443,6 +1443,44 @@ def test_the_capability_and_driver_assets_exist():
         assert (ROOT / "drivers/visitcar/assets/images" / f"{name}.png").exists()
 
 
+def test_the_app_icon_is_not_the_driver_icon():
+    """App Store review, 2026-08-13: "The app icon is identical to the driver icon. Please
+    make sure the App Icon is a unique icon that represents the brand or purpose."
+
+    **This reverses an explicit earlier request** — the maintainer asked in v0.1.3 for the app
+    icon to be made identical to the device icon, and it was. Review is right that the two
+    have different jobs: one identifies the app in a list of apps, the other identifies one
+    paired parking lot among a home's devices. Pinned here so a future tidy-up cannot
+    helpfully unify them again and re-earn the same note.
+    """
+    app_icon = (ROOT / "assets/icon.svg").read_text(encoding="utf-8")
+    driver_icon = (ROOT / "drivers/visitcar/assets/icon.svg").read_text(encoding="utf-8")
+
+    assert app_icon.strip() != driver_icon.strip()
+
+
+def test_the_generated_images_are_newer_than_the_art_they_come_from():
+    """Every shipped PNG is generated from an SVG by `scripts/make_images.py`, and nothing
+    else checks that someone actually re-ran it.
+
+    This is not hypothetical: the app-store PNGs were regenerated from a hand-made
+    intermediate `docs/app-image.png` that was itself nine days older than the drawing it
+    claimed to come from, so an edited SVG shipped as the previous picture. The script now
+    rasterizes the SVGs directly; this makes forgetting to run it a test failure rather than
+    a surprise on the store page.
+    """
+    pairs = [
+        (ROOT / "docs/app-image.svg", ROOT / "assets/images"),
+        (ROOT / "docs/device-image-visitcar.svg", ROOT / "drivers/visitcar/assets/images"),
+    ]
+    for source, folder in pairs:
+        for image in sorted(folder.glob("*.png")):
+            assert image.stat().st_mtime >= source.stat().st_mtime, (
+                f"{image.relative_to(ROOT)} is older than {source.relative_to(ROOT)} — "
+                "run `python3 scripts/make_images.py`"
+            )
+
+
 def test_no_capability_icon_is_left_orphaned():
     """An unused SVG in a public repo is the kind of thing a reader mistakes for a live
     surface. `parking.svg` went with the 주차장명 capability; `visitcar.svg` went when the

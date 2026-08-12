@@ -2,35 +2,31 @@
   <!-- Source graphic for drivers/visitcar/assets/images/{small,large,xlarge}.png.
        Rasterized by scripts/make_images.py (rsvg-convert) to 75 / 500 / 1000 square.
 
-       There is no product to photograph — a paired "device" here is one parking lot at an
-       apartment complex, i.e. a row in someone's account — so this is original vector
-       artwork rather than a photo. Square with an opaque white background, per Homey's
-       driver-image guideline; the transparent line-art version is the icon, not this. -->
+       **A plain P, on review's own suggestion.** The previous version was an illustration of
+       a barrier and a car; App Store review asked for "a simple icon depicting a P (as
+       commonly used for parking)" as a cleaner alternative, and they are right — at 75 px,
+       which is the size this image is most often seen at, a scene turns to mush while a
+       letterform stays a letterform.
+
+       Square with an opaque background, per Homey's driver-image guideline. No <text> and no
+       external font: the P is a path, so it rasterizes identically on any machine. -->
+
   <rect width="1000" height="1000" fill="#FFFFFF"/>
-  <rect x="70" y="70" width="860" height="860" rx="150" fill="#1B4F72"/>
+  <rect x="70" y="70" width="860" height="860" rx="170" fill="#1B4F72"/>
 
-  <!-- gate posts -->
-  <rect x="316" y="368" width="56" height="330" rx="16" fill="#FFFFFF"/>
-  <rect x="620" y="368" width="56" height="330" rx="16" fill="#FFFFFF"/>
+  <!-- P -->
+  <path fill="#FFFFFF" fill-rule="evenodd"
+        d="M356 168 h214 q186 0 186 176 t-186 176 h-104 v192 h-110 z
+           M466 280 v128 h100 q76 0 76 -64 t-76 -64 z" />
 
-  <!-- barrier arm, raised (access granted) -->
-  <g transform="rotate(-26 344 388)">
-    <rect x="344" y="364" width="436" height="46" rx="23" fill="#FFFFFF"/>
-    <rect x="384" y="364" width="38" height="46" fill="#D64545"/>
-    <rect x="468" y="364" width="38" height="46" fill="#D64545"/>
-    <rect x="552" y="364" width="38" height="46" fill="#D64545"/>
-    <rect x="636" y="364" width="38" height="46" fill="#D64545"/>
-    <rect x="720" y="364" width="38" height="46" fill="#D64545"/>
-  </g>
-
-  <!-- car passing through -->
-  <g>
-    <path d="M484 588 q28 -66 88 -66 h48 q60 0 88 66 z" fill="#FFFFFF"/>
-    <rect x="440" y="586" width="304" height="104" rx="30" fill="#F2F2F5"/>
-    <rect x="516" y="608" width="152" height="34" rx="8" fill="#1B4F72"/>
-    <circle cx="494" cy="694" r="34" fill="#1B4F72"/>
-    <circle cx="494" cy="694" r="12" fill="#F2F2F5"/>
-    <circle cx="690" cy="694" r="34" fill="#1B4F72"/>
-    <circle cx="690" cy="694" r="12" fill="#F2F2F5"/>
+  <!-- Painted bay markings, faint and well clear of the letterform. Enough to say
+       "parking" rather than "the letter P", low-contrast enough not to compete with it at
+       thumbnail size, and the reason the P is set above centre rather than in it. -->
+  <g fill="#FFFFFF" opacity="0.22">
+    <rect x="170" y="796" width="660" height="20" rx="10"/>
+    <rect x="170" y="796" width="20" height="126" rx="10"/>
+    <rect x="390" y="796" width="20" height="126" rx="10"/>
+    <rect x="590" y="796" width="20" height="126" rx="10"/>
+    <rect x="810" y="796" width="20" height="126" rx="10"/>
   </g>
 </svg>

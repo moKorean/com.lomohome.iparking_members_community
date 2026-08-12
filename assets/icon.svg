@@ -1,26 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 960" width="960" height="960">
-  <!-- Device icon: a visitor-parking barrier raised over a car, line art.
-       Monochrome strokes on a transparent background, which is what Homey recolours for
-       the device tile — a filled/coloured icon reads as a foreign object there. Plain
-       shapes only (no <text>, no external font) so it renders identically everywhere. -->
-  <style>
-    path, rect, line, circle { fill: none; stroke: #000; stroke-linecap: round; stroke-linejoin: round; }
-    .o { stroke-width: 40; }
-    .d { stroke-width: 26; }
-  </style>
+  <!-- App icon: an apartment block with a parking sign.
 
-  <!-- gate post, with the barrier arm raised: access granted -->
-  <line x1="220" y1="300" x2="220" y2="800" class="o"/>
-  <line x1="150" y1="800" x2="290" y2="800" class="d"/>
-  <path d="M 236 286 L 720 176" class="o"/>
-  <line x1="360" y1="258" x2="378" y2="330" class="d"/>
-  <line x1="470" y1="233" x2="488" y2="305" class="d"/>
-  <line x1="580" y1="208" x2="598" y2="280" class="d"/>
+       Deliberately NOT the driver icon. App Store review flagged the two being identical:
+       the app icon identifies the app, the driver icon identifies one paired parking lot,
+       and one drawing cannot do both jobs. The driver keeps the barrier-and-car line art;
+       this says what the app is *for* — parking at the building you live in.
 
-  <!-- car passing under it -->
-  <path d="M 420 620 L 462 520 Q 476 486 512 486 L 664 486 Q 700 486 714 520 L 756 620" class="d"/>
-  <rect x="392" y="618" width="392" height="120" rx="42" class="o"/>
-  <line x1="588" y1="486" x2="588" y2="618" class="d"/>
-  <circle cx="474" cy="762" r="46" class="d"/>
-  <circle cx="702" cy="762" r="46" class="d"/>
+       Not iParking's own logo either, which is what review suggested. This app states in
+       every README that it is unaffiliated, and shipping a third party's trademark in a
+       published app is the maintainer's decision to make, not a detail to settle in an
+       asset file. An original mark says the same thing and carries no such claim.
+
+       Filled dark shapes on transparency, matching the sibling app's published icon.
+       Windows and the P counter are holes punched with fill-rule="evenodd", so the icon
+       reads correctly on any background Homey puts behind it. No <text> and no external
+       font — the P is drawn as a path, so it renders identically everywhere. -->
+
+  <g fill="#111111" fill-rule="evenodd">
+
+    <!-- apartment block: outer silhouette, windows knocked out -->
+    <path d="M120 300 q0 -40 40 -40 h300 q40 0 40 40 v560 h-380 z
+             M180 340 h70 v70 h-70 z
+             M290 340 h70 v70 h-70 z
+             M400 340 h70 v70 h-70 z
+             M180 450 h70 v70 h-70 z
+             M290 450 h70 v70 h-70 z
+             M400 450 h70 v70 h-70 z
+             M180 560 h70 v70 h-70 z
+             M290 560 h70 v70 h-70 z
+             M400 560 h70 v70 h-70 z
+             M180 670 h70 v70 h-70 z
+             M290 670 h70 v70 h-70 z
+             M400 670 h70 v70 h-70 z" />
+
+    <!-- ground line the block and the sign share, so they read as one scene -->
+    <path d="M96 872 h768 q24 0 24 24 t-24 24 h-768 q-24 0 -24 -24 t24 -24 z" />
+
+    <!-- parking sign: plate with the P as a hole, on a post -->
+    <path d="M600 300 q0 -44 44 -44 h216 q44 0 44 44 v304 q0 44 -44 44 h-216 q-44 0 -44 -44 z
+             M680 340 v224 h56 v-72 h60 q84 0 84 -76 t-84 -76 z
+             M736 404 h58 q30 0 30 32 t-30 32 h-58 z" />
+    <path d="M724 648 h56 v224 h-56 z" />
+  </g>
 </svg>
