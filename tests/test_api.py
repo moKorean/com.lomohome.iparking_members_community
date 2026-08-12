@@ -39,7 +39,7 @@ from iparking_lib.iparking.dates import DateTooFarError
 PARK_SEQ = 9001
 MEMB_NAME = "999동9999호"
 TOKEN = "11111111-2222-3333-4444-555555555555"
-PLATE = "12가3456"
+PLATE = "12가1236"
 
 
 # --- _body / _query / _int / _mask --------------------------------------------
@@ -447,7 +447,7 @@ def test_register_success_echoes_the_date_it_actually_used(make_homey):
     session = _RegisterApi(codes.OUTCOME_OK)
     homey = make_homey(api=session)
     result = asyncio.run(api.register_visitor(homey, body={
-        "car_number": "12가 3456", "park_seq": PARK_SEQ, "stor_seq": STOR_SEQ,
+        "car_number": "12가 1236", "park_seq": PARK_SEQ, "stor_seq": STOR_SEQ,
     }))
 
     assert result["ok"] is True
@@ -569,7 +569,7 @@ def test_history_keys_each_row_on_is_active_not_on_presence(make_homey):
     working 취소 as broken."""
     session = _HistoryApi(rows=[
         _row(PLATE, "20260805", "RESERVE"),
-        _row("34나5678", "20260805", "CANCEL"),
+        _row("12가1237", "20260805", "CANCEL"),
     ])
     homey = make_homey(api=session)
     rows = asyncio.run(api.get_history(
@@ -651,8 +651,8 @@ def test_history_rows_come_out_newest_first(make_homey):
     the settings table, the widget and any later consumer all read the same order."""
     session = _HistoryApi(rows=[
         _row(PLATE, "20260601", "RESERVE"),
-        _row("34나5678", "20260805", "RESERVE"),
-        _row("56다6789", "20260713", "RESERVE"),
+        _row("12가1237", "20260805", "RESERVE"),
+        _row("12가1239", "20260713", "RESERVE"),
     ])
     homey = make_homey(api=session)
 
@@ -670,8 +670,8 @@ def test_history_breaks_a_same_date_tie_on_invt_seq_descending(make_homey):
     whatever the response happened to arrive in."""
     session = _HistoryApi(rows=[
         _row(PLATE, "20260805", "RESERVE", seq=3184551),
-        _row("34나5678", "20260805", "RESERVE", seq=3184553),
-        _row("56다6789", "20260805", "RESERVE", seq=3184552),
+        _row("12가1237", "20260805", "RESERVE", seq=3184553),
+        _row("12가1239", "20260805", "RESERVE", seq=3184552),
     ])
     homey = make_homey(api=session)
 
@@ -680,7 +680,7 @@ def test_history_breaks_a_same_date_tie_on_invt_seq_descending(make_homey):
     ))["rows"]
 
     assert [row["invt_seq"] for row in rows] == [3184553, 3184552, 3184551]
-    assert [row["car_number"] for row in rows] == ["34나5678", "56다6789", PLATE]
+    assert [row["car_number"] for row in rows] == ["12가1237", "12가1239", PLATE]
 
 
 def test_history_sorts_a_row_whose_date_will_not_parse_without_dropping_it(make_homey):
@@ -689,7 +689,7 @@ def test_history_sorts_a_row_whose_date_will_not_parse_without_dropping_it(make_
     from vanishing out of the table."""
     session = _HistoryApi(rows=[
         _row(PLATE, "20260805", "RESERVE"),
-        _row("34나5678", "not-a-date", "RESERVE"),
+        _row("12가1237", "not-a-date", "RESERVE"),
     ])
     homey = make_homey(api=session)
 
@@ -698,7 +698,7 @@ def test_history_sorts_a_row_whose_date_will_not_parse_without_dropping_it(make_
     ))["rows"]
 
     assert len(rows) == 2
-    assert {row["car_number"] for row in rows} == {PLATE, "34나5678"}
+    assert {row["car_number"] for row in rows} == {PLATE, "12가1237"}
 
 
 def test_history_returns_plates_unmasked_because_the_user_owns_them(make_homey):
@@ -752,7 +752,7 @@ def test_history_strips_the_plate_filter(make_homey):
     session = _HistoryApi()
     homey = make_homey(api=session)
     asyncio.run(api.get_history(homey, query={
-        "park_seq": PARK_SEQ, "stor_seq": STOR_SEQ, "car_number": " 12가 3456 ",
+        "park_seq": PARK_SEQ, "stor_seq": STOR_SEQ, "car_number": " 12가 1236 ",
     }))
     assert session.history_calls[0]["car_number"] == PLATE
 

@@ -20,7 +20,7 @@ from iparking_lib.iparking.plate import (
     strip_plate,
 )
 
-PLATE = "12가4567"
+PLATE = "12가1235"
 
 # Characters `str.isspace()` returns True for. The point of the table is that it is much
 # wider than "space and tab" — U+3000 is what a Korean IME emits in full-width mode, and
@@ -76,7 +76,7 @@ def test_isspace_characters_are_stripped(codepoint, name):
     # implementation would silently need the explicit set instead, and this is where that
     # shows up.
     assert ch.isspace(), f"U+{codepoint:04X} {name} is no longer isspace()"
-    assert normalize_plate("12가" + ch + "4567") == PLATE
+    assert normalize_plate("12가" + ch + "1235") == PLATE
 
 
 @pytest.mark.parametrize(
@@ -88,16 +88,16 @@ def test_zero_width_characters_are_stripped(codepoint, name):
     # would reject these plates with nothing visible to explain why.
     assert not ch.isspace(), f"U+{codepoint:04X} {name} is now isspace(); simplify plate.py"
     assert unicodedata.category(ch) == "Cf"
-    assert normalize_plate("12가" + ch + "4567") == PLATE
+    assert normalize_plate("12가" + ch + "1235") == PLATE
 
 
 def test_criterion_9_examples():
     """The exact inputs named in acceptance criterion 9."""
-    assert normalize_plate("12가 4567") == PLATE                    # U+0020
-    assert normalize_plate("12가" + chr(0x3000) + "4567") == PLATE  # U+3000
-    assert normalize_plate("12가" + chr(0x00A0) + "4567") == PLATE  # U+00A0
-    assert normalize_plate("12가\t4567") == PLATE                   # U+0009
-    assert normalize_plate("12가" + chr(0x200B) + "4567") == PLATE  # U+200B
+    assert normalize_plate("12가 1235") == PLATE                    # U+0020
+    assert normalize_plate("12가" + chr(0x3000) + "1235") == PLATE  # U+3000
+    assert normalize_plate("12가" + chr(0x00A0) + "1235") == PLATE  # U+00A0
+    assert normalize_plate("12가\t1235") == PLATE                   # U+0009
+    assert normalize_plate("12가" + chr(0x200B) + "1235") == PLATE  # U+200B
     assert normalize_plate(unicodedata.normalize("NFD", PLATE)) == PLATE
 
 
@@ -113,14 +113,14 @@ def test_decomposed_jamo_is_composed_before_validation():
 
 def test_decomposed_and_whitespace_together():
     """The realistic paste: a decomposed plate that also picked up an invisible space."""
-    messy = unicodedata.normalize("NFD", "12가") + chr(0x200B) + chr(0x3000) + "4567"
+    messy = unicodedata.normalize("NFD", "12가") + chr(0x200B) + chr(0x3000) + "1235"
     assert normalize_plate(messy) == PLATE
 
 
 def test_leading_trailing_and_repeated_whitespace():
-    assert normalize_plate("  12가 4567\n") == PLATE
-    assert normalize_plate("1 2 가 4 5 6 7") == PLATE
-    assert normalize_plate(chr(0xFEFF) + "12가4567" + chr(0xFEFF)) == PLATE
+    assert normalize_plate("  12가 1235\n") == PLATE
+    assert normalize_plate("1 2 가 1 2 3 5") == PLATE
+    assert normalize_plate(chr(0xFEFF) + "12가1235" + chr(0xFEFF)) == PLATE
 
 
 @pytest.mark.parametrize(
@@ -194,7 +194,7 @@ def test_strip_plate_does_not_validate():
     assert strip_plate("완전히 이상한 값") == "완전히이상한값"
     assert strip_plate("") == ""
     assert strip_plate(None) == ""
-    assert strip_plate(unicodedata.normalize("NFD", "12가3456")) == "12가3456"
+    assert strip_plate(unicodedata.normalize("NFD", "12가1236")) == "12가1236"
 
 
 # --- mask_plate: the redaction rule for logs and diagnostics ----------------------
@@ -203,8 +203,8 @@ def test_strip_plate_does_not_validate():
 @pytest.mark.parametrize(
     "plate,masked",
     [
-        ("12가3456", "12가****"),    # the example in CLAUDE.md's "never logged" rule
-        ("12가4567", "12가****"),
+        ("12가1236", "12가****"),    # the example in CLAUDE.md's "never logged" rule
+        ("12가1235", "12가****"),
         ("123가1234", "123가****"),
         ("서울12가1234", "서울12가****"),
         ("임1234", "임****"),
@@ -223,14 +223,14 @@ def test_mask_plate_hides_the_serial(plate, masked):
 
 
 def test_mask_plate_normalizes_before_masking():
-    """Otherwise `"12가 4567"` would log with its whitespace, i.e. as a second spelling.
+    """Otherwise `"12가 1235"` would log with its whitespace, i.e. as a second spelling.
 
     Two spellings of one plate in a log is two chances for the unmasked characters to differ
     from what the mask assumed.
     """
-    assert mask_plate("12가 4567") == "12가****"
-    assert mask_plate(unicodedata.normalize("NFD", "12가3456")) == "12가****"
-    assert mask_plate("12가" + chr(0x200B) + "4567") == "12가****"
+    assert mask_plate("12가 1235") == "12가****"
+    assert mask_plate(unicodedata.normalize("NFD", "12가1236")) == "12가****"
+    assert mask_plate("12가" + chr(0x200B) + "1235") == "12가****"
 
 
 @pytest.mark.parametrize(

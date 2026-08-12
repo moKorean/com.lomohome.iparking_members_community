@@ -85,7 +85,7 @@ The Homey app itself is © 2026 Geunwon Mo.
   takes only a plate and always registers for today in KST. Both cards go through the same
   register path and differ only in where the date comes from.
   <br>The date-picking card **echoes the date it actually used back in the success
-  notification** (`12가4567 · 2026-08-05 (Wed) 방문 등록`). Whether Homey hands a `date`
+  notification** (`12가1234 · 2026-08-05 (Wed) 방문 등록`). Whether Homey hands a `date`
   argument over as `dd-mm-yyyy` or `mm-dd-yyyy` is not pinned anywhere, and the two are
   **shape-identical**, so a misread would register the wrong day *silently*. Where the values
   decide it (`25-12-2026`, whose first field exceeds 12) the app resolves it correctly on its
@@ -98,7 +98,7 @@ The Homey app itself is © 2026 Geunwon Mo.
   buttons**: a press does not leave the control switched on, so you can press one as often as
   you like. Each runs the **same register path** as the Flow cards, so the no-retry write, the
   "already registered" outcome and the uncertain-outcome guidance all behave identically. Saving
-  normalizes the plate in place so you see what was stored (`12가 3456` → `12가3456`). A
+  normalizes the plate in place so you see what was stored (`12가 1234` → `12가1234`). A
   half-filled slot or an invalid plate produces no button, and the log says which slot and why.
 - **Registration history** — view and cancel registrations from the app settings page,
   **newest visit first**. The window runs **three months back and three months ahead**, so

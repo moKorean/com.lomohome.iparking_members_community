@@ -78,7 +78,7 @@ typo'd plate produces no button *and a log line saying which slot and why* — s
 would leave a user staring at a button that never appeared with nothing to read.
 
 **The one runtime settings write in this app is here, and it is deferred on purpose.** When a
-plate validates, the normalized form is written back (`12가 3456` → `12가3456`) so the
+plate validates, the normalized form is written back (`12가 1234` → `12가1234`) so the
 maintainer *sees* what was stored, the same visibility rule the settings page follows on blur.
 It cannot be written from inside the settings callback: the SDK refuses that outright
 (`Device.set_settings` raises `Cannot set settings while on_settings is still pending`, and
@@ -145,7 +145,7 @@ def read_favorites(settings) -> tuple[list[Favorite], list[str]]:
     """Every complete, valid (이름, 차량번호) pair in `settings`, plus a reason per rejected slot.
 
     **A pair counts only when both halves are present and the plate validates.** The plate goes
-    through `normalize_plate`, so the maintainer's own example — `12가 3456`, *with a space* —
+    through `normalize_plate`, so the maintainer's own example — `12가 1234`, *with a space* —
     is accepted and stored without it; that is the whitespace-stripping case `plate.py` exists
     for, and rejecting it would make the feature fail on its first use.
 
@@ -652,7 +652,7 @@ class VisitCarDevice_(device.Device):
         signature here would present as settings that save but never produce a button.
 
         Normalization happens **in memory first**, so the reconcile below runs against the
-        normalized dict and a plate typed as `12가 3456` produces a button on the same save
+        normalized dict and a plate typed as `12가 1234` produces a button on the same save
         rather than the next one. The visible write-back is *scheduled*, because the SDK refuses
         a `set_settings` made while this hook is still pending — see `_schedule_normalize`.
         """
@@ -713,7 +713,7 @@ class VisitCarDevice_(device.Device):
         and `_on_settings` clears that flag only in its `finally`, *after* also overwriting its
         cached settings with the frozen incoming dict. So an inline write could not succeed, and
         would not have survived if it had. On the maintainer's hub the inline version failed
-        exactly this way: `fav_plate_1` stayed ``12가 3456``, space and all, while
+        exactly this way: `fav_plate_1` stayed ``12가 1234``, space and all, while
         `_sdk_call` logged the refusal into a hub log nobody was watching.
 
         A task rather than a callback: `asyncio.create_task` cannot start the coroutine until

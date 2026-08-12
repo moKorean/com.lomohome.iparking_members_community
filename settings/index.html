@@ -488,9 +488,9 @@
     /*
      * Echo the normalized plate back into the input on blur.
      *
-     * This is a requirement, not a nicety: the vendor's own site just rejects `12가 4567`
+     * This is a requirement, not a nicety: the vendor's own site just rejects `12가 1234`
      * without ever saying that the space is the problem. Showing the user their input turn into
-     * `12가4567` is what makes requirement 7 observable instead of merely implemented. The note
+     * `12가1234` is what makes requirement 7 observable instead of merely implemented. The note
      * only appears when normalization actually changed something.
      */
     function onPlateBlur() {

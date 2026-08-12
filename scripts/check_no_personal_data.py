@@ -27,7 +27,7 @@ separators stripped — so a real value is a token under at least one rule.
     python3 scripts/check_no_personal_data.py --add VALUE # print the hash line to add
 
 Use synthetic values in tests, fixtures and docs: `iparking-dev`, `999동9999호`,
-`예시동 샘플아파트`, plates shaped like `12가3456`, account ids like `100001` / `9001`.
+`예시동 샘플아파트`, plates shaped like `12가1236`, account ids like `100001` / `9001`.
 """
 
 from __future__ import annotations

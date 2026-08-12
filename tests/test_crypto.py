@@ -76,14 +76,14 @@ def test_json_bytes_uses_compact_separators():
 def test_json_bytes_emits_hangul_as_utf8_not_backslash_escapes():
     """`ensure_ascii=False` is required, not preferred.
 
-    `userName` carries `memb_name`, which is Hangul. With escaping on, `12가4567` becomes
+    `userName` carries `memb_name`, which is Hangul. With escaping on, `12가1235` becomes
     `12\\uac004567` — different bytes, and 8 bytes longer per syllable, so a body that was
     safely mid-block moves onto a boundary. That is how a padding bug and a serialisation
     bug conspire into a failure that only shows up for *some* plates.
     """
-    produced = crypto.json_bytes({"carNumber": "12가4567"})
+    produced = crypto.json_bytes({"carNumber": "12가1235"})
 
-    assert produced == '{"carNumber":"12가4567"}'.encode()
+    assert produced == '{"carNumber":"12가1235"}'.encode()
     assert b"\\u" not in produced
     assert "가".encode() in produced
 
@@ -210,10 +210,19 @@ def test_recon_appendix_records_the_same_envelope_as_the_fixture(case):
     Asserted by substring rather than by parsing the document's structure, so reformatting
     the prose cannot break the build — only changing a recorded value can, which is
     precisely when it should.
+
+    **Both halves of each case, not just the ciphertext.** This test used to check the
+    envelope alone, so a sweep that renamed the sample plate in the document — the plaintext
+    is prose, the ciphertext is not — left the appendix stating that one body encrypts to
+    another body's envelope, and the suite stayed green. An appendix that is wrong in a way
+    the tests cannot see is worse than no appendix: it is the thing a future reader would
+    reimplement against.
     """
     text = RECON.read_text(encoding="utf-8")
+    body = bytes.fromhex(case["body_json_hex"]).decode("utf-8")
 
     assert case["envelope"] in text, f"{case['name']} envelope missing from docs/RECON.md"
+    assert body in text, f"{case['name']} plaintext missing from docs/RECON.md"
 
 
 def test_recon_no_longer_only_describes_the_method():

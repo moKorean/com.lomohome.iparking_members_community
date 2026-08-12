@@ -103,13 +103,13 @@ LENGTHS=(0 1 15 16 17 31 32 33 47)
 # 96 bytes ≡ 0 mod 16 → a whole extra padding block, on a login-shaped body.
 BODY_LOGIN='{"client_id":"iparking-dev","client_pwd":"synthetic-not-a-real-password","client_os_type":"WEB"}'
 # 25 bytes ≡ 9 mod 16. Isolates the Hangul question: `ensure_ascii=True` would turn
-# `12가4567` into `12가4567`, changing both the bytes and the length.
-BODY_PLATE='{"carNumber":"12가4567"}'
+# `12가1234` into `12\uac001234`, changing both the bytes and the length.
+BODY_PLATE='{"carNumber":"12가1234"}'
 # 221 bytes ≡ 13 mod 16 — the register body from docs/RECON.md §3.
-BODY_REGISTER='{"parkSeq":9001,"storSeq":100001,"userId":"iparking-dev","userName":"999동9999호","invitationDate":"20260805","invitationInfoList":[{"carNumber":"12가4567","memo":"","mobile1":"010","mobile2":"1234","mobile3":"5678"}]}'
+BODY_REGISTER='{"parkSeq":9001,"storSeq":100001,"userId":"iparking-dev","userName":"999동9999호","invitationDate":"20260805","invitationInfoList":[{"carNumber":"12가1234","memo":"","mobile1":"010","mobile2":"1234","mobile3":"5678"}]}'
 # The same body with a 3-character memo: 224 bytes ≡ 0 mod 16. THIS is the shape of the
 # bug the matrix exists for — a register body landing exactly on a block boundary.
-BODY_REGISTER_ALIGNED='{"parkSeq":9001,"storSeq":100001,"userId":"iparking-dev","userName":"999동9999호","invitationDate":"20260805","invitationInfoList":[{"carNumber":"12가4567","memo":"abc","mobile1":"010","mobile2":"1234","mobile3":"5678"}]}'
+BODY_REGISTER_ALIGNED='{"parkSeq":9001,"storSeq":100001,"userId":"iparking-dev","userName":"999동9999호","invitationDate":"20260805","invitationInfoList":[{"carNumber":"12가1234","memo":"abc","mobile1":"010","mobile2":"1234","mobile3":"5678"}]}'
 
 emit_envelope_case() {
 	local name="$1" body="$2" trailing="$3"

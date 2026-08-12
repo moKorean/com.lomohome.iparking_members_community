@@ -11,7 +11,7 @@ Everything else in [`RECON.md`](./RECON.md) was established without a write.
 
 | Safeguard | Why |
 |---|---|
-| Plate **`임0000`** | Matches the vendor regex (`^임(?:\d{4}\|\d{6})$`) as a temporary-permit plate. Obviously synthetic, and vanishingly unlikely to be a real vehicle at this building — unlike a `12가4567`-shaped plate, which could be somebody's actual car. |
+| Plate **`임0000`** | Matches the vendor regex (`^임(?:\d{4}\|\d{6})$`) as a temporary-permit plate. Obviously synthetic, and vanishingly unlikely to be a real vehicle at this building — unlike a `12가1234`-shaped plate, which could be somebody's actual car. |
 | Visit date **+85 days** | A reservation that far ahead cannot open a gate this week even if cleanup failed completely. |
 | `invt_seq` persisted **before** cleanup was attempted | A crash mid-run leaves a manual handle rather than an orphan nobody can find. |
 | `DELETE` proven **before** any second write | The original design used `try/finally` cleanup that depended on `DELETE` — itself unexercised. That is a circular safety net. |

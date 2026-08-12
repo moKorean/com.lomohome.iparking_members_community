@@ -19,7 +19,7 @@ Three steps, and **the order is the point**: NFC-compose, then strip, then valid
 3. **Then validate**, against the vendor's own regex (`docs/RECON.md` — the newest of
    the three in the site's bundle).
 
-The site itself does **not** trim; it just rejects `"12가 4567"`. The stripping here is
+The site itself does **not** trim; it just rejects `"12가 1234"`. The stripping here is
 therefore ours, which is why it is thorough rather than a `.strip()`.
 
 `normalize_plate` validates and raises; `strip_plate` performs steps 1–2 only. Both
@@ -89,7 +89,7 @@ def strip_plate(value: str | None) -> str:
 
 
 def mask_plate(value: str | None) -> str:
-    """A plate safe to put in a log line or a diagnostic report: `12가3456` → `12가****`.
+    """A plate safe to put in a log line or a diagnostic report: `12가1234` → `12가****`.
 
     Lives here rather than in `api.py` because the pure client logs plates too, and two
     implementations of a redaction rule is one too many — the day they diverge is the day

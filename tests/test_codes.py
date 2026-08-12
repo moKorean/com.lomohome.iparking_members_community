@@ -195,7 +195,7 @@ def test_per_car_outcome_is_none_when_it_cannot_tell(status):
 
 # --- parse_per_car shape tolerance -----------------------------------------------
 
-PLATE = "12가4567"
+PLATE = "12가1235"
 
 
 @pytest.mark.parametrize(
@@ -228,13 +228,13 @@ def test_parse_per_car_normalizes_the_returned_plate():
     """The server's spelling is normalized before it becomes a key (§3.5, both sides)."""
     payload = {
         "invitationInfoList": [
-            {"carNumber": "12가" + chr(0x00A0) + "4567", "result": "SUCCESS"},
-            {"carNumber": "34나" + chr(0x200B) + "1234", "result": "EXIST"},
+            {"carNumber": "12가" + chr(0x00A0) + "1235", "result": "SUCCESS"},
+            {"carNumber": "12가" + chr(0x200B) + "1246", "result": "EXIST"},
         ]
     }
     assert codes.parse_per_car(payload) == {
         PLATE: codes.OUTCOME_OK,
-        "34나1234": codes.OUTCOME_ALREADY_REGISTERED,
+        "12가1246": codes.OUTCOME_ALREADY_REGISTERED,
     }
 
 
@@ -245,14 +245,14 @@ def test_parse_per_car_handles_a_batch():
             "invitationInfoList": [
                 {"carNumber": PLATE, "result": "SUCCESS"},
                 {"carNumber": "임0000", "result": "EXIST"},
-                {"carNumber": "56다7890", "result": "FAIL"},
+                {"carNumber": "12가1240", "result": "FAIL"},
             ]
         },
     }
     assert codes.parse_per_car(payload) == {
         PLATE: codes.OUTCOME_OK,
         "임0000": codes.OUTCOME_ALREADY_REGISTERED,
-        "56다7890": codes.OUTCOME_FAILED,
+        "12가1240": codes.OUTCOME_FAILED,
     }
 
 
@@ -288,7 +288,7 @@ def test_an_explicit_row_wins_over_the_top_level_code():
         ({"result": "0000", "invitationInfoList": [{"carNumber": PLATE, "result": "WAT"}]},
          "row with an unrecognised status"),
         ({"result": "0000", "invitationInfoList": [{"result": "SUCCESS"}]}, "row with no plate"),
-        ({"result": "0000", "invitationInfoList": ["12가4567"]}, "list of strings"),
+        ({"result": "0000", "invitationInfoList": ["12가1235"]}, "list of strings"),
         (None, "no payload"),
         ([], "a list where an object was expected"),
         ("0000", "a bare string"),

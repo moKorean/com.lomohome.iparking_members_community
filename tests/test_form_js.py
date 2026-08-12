@@ -113,9 +113,9 @@ def test_normalize_plate_matches_python_exactly():
 
 def test_normalize_plate_composes_before_stripping():
     """NFC first, so a decomposed-jamo plate is not rejected for no visible reason."""
-    decomposed = unicodedata.normalize("NFD", "12가4567")
-    assert decomposed != "12가4567"          # guard: the fixture is actually decomposed
-    assert run_js(f"out(F.normalizePlate({json.dumps(decomposed)}));") == "12가4567"
+    decomposed = unicodedata.normalize("NFD", "12가1235")
+    assert decomposed != "12가1235"          # guard: the fixture is actually decomposed
+    assert run_js(f"out(F.normalizePlate({json.dumps(decomposed)}));") == "12가1235"
 
 
 def test_normalize_plate_tolerates_nullish():
@@ -233,7 +233,7 @@ def test_already_registered_is_its_own_state_not_a_failure():
     """`api.py` returns it `ok: true`. Re-entering a plate that is already registered is the
     most likely real result of a first use, and reporting it as an error teaches the user the
     app is broken on their very first try."""
-    response = {"ok": True, "outcome": "already_registered", "car_number": "12가3456"}
+    response = {"ok": True, "outcome": "already_registered", "car_number": "12가1236"}
     got = run_js(f"out(F.classifyRegister({json.dumps(response)}));")
     assert got["state"] == "already"
     assert got["retryable"] is False
@@ -280,17 +280,17 @@ def test_only_a_real_registration_gets_a_toast():
     for state in ("already", "uncertain", "error"):
         verdict = {
             "state": state,
-            "response": {"ok": True, "car_number": "12가3456", "api_date": "20260805"},
+            "response": {"ok": True, "car_number": "12가1236", "api_date": "20260805"},
         }
         assert _toast(verdict) == ""
 
 
 def test_a_registration_for_today_says_today():
     """The wording the maintainer asked for, verbatim."""
-    verdict = {"state": "ok", "response": {"car_number": "12가3456", "api_date": "20260805",
+    verdict = {"state": "ok", "response": {"car_number": "12가1236", "api_date": "20260805",
                                            "date": "2026년 8월 5일 (수)"}}
 
-    assert _toast(verdict) == "12가3456 차량이 오늘 방문 등록되었습니다."
+    assert _toast(verdict) == "12가1236 차량이 오늘 방문 등록되었습니다."
 
 
 def test_a_registration_for_another_day_names_that_day_instead_of_saying_today():
@@ -298,20 +298,20 @@ def test_a_registration_for_another_day_names_that_day_instead_of_saying_today()
     `new Date()` stays uninvolved. A tile press is always today, which is where the 오늘 wording
     comes from; this page can register any date in the window, and calling next Tuesday "오늘"
     would send a visitor to a gate on the wrong day believing the app agreed."""
-    verdict = {"state": "ok", "response": {"car_number": "12가3456", "api_date": "20260812",
+    verdict = {"state": "ok", "response": {"car_number": "12가1236", "api_date": "20260812",
                                            "date": "2026년 8월 12일 (수)"}}
 
-    assert _toast(verdict) == "12가3456 차량이 2026년 8월 12일 (수) 방문 등록되었습니다."
+    assert _toast(verdict) == "12가1236 차량이 2026년 8월 12일 (수) 방문 등록되었습니다."
 
 
 def test_an_unknown_today_names_the_date_rather_than_guessing_it_is_today():
     """`/status` not having answered is not evidence that the visit is today. The fallback names
     the day the handler resolved, which is always true, instead of the one claim that might not
     be."""
-    verdict = {"state": "ok", "response": {"car_number": "12가3456", "api_date": "20260805",
+    verdict = {"state": "ok", "response": {"car_number": "12가1236", "api_date": "20260805",
                                            "date": "2026년 8월 5일 (수)"}}
 
-    assert _toast(verdict, status={}) == "12가3456 차량이 2026년 8월 5일 (수) 방문 등록되었습니다."
+    assert _toast(verdict, status={}) == "12가1236 차량이 2026년 8월 5일 (수) 방문 등록되었습니다."
 
 
 def test_a_toast_with_no_plate_to_name_is_not_shown_at_all():
@@ -322,9 +322,9 @@ def test_a_toast_with_no_plate_to_name_is_not_shown_at_all():
 
 
 def test_the_toast_is_translated_rather_than_hardcoded_korean():
-    verdict = {"state": "ok", "response": {"car_number": "12가3456", "api_date": "20260805"}}
+    verdict = {"state": "ok", "response": {"car_number": "12가1236", "api_date": "20260805"}}
 
-    assert _toast(verdict, lang="en") == "12가3456 is registered to visit today."
+    assert _toast(verdict, lang="en") == "12가1236 is registered to visit today."
 
 
 # --- messageOf: prefer the viewer's language ----------------------------------
@@ -447,11 +447,11 @@ def test_history_path_carries_the_lot_and_encodes_its_filters():
     lot = {"lot_id": "1160009001", "park_seq": 9001, "stor_seq": 100001}
     got = run_js(
         f"out(F.historyPath({json.dumps(lot)}, "
-        '{start_date: "2026-08-01", car_number: "12가3456"}));'
+        '{start_date: "2026-08-01", car_number: "12가1236"}));'
     )
     assert got.startswith("/history?park_seq=9001&stor_seq=100001")
     assert "start_date=2026-08-01" in got
-    assert "car_number=12%EA%B0%803456" in got
+    assert "car_number=12%EA%B0%801236" in got
 
 
 def test_history_path_omits_absent_filters():
@@ -495,15 +495,15 @@ const { c, calls } = harness({
   "GET /lots": { ok: true, can_register: true,
                  lots: [{ lot_id: "1160009001", park_seq: 9001, stor_seq: 100001,
                           park_name: "예시동 샘플아파트[출입통제A]", can_register: true }] },
-  "POST /register": { ok: true, outcome: "ok", car_number: "12가4567",
+  "POST /register": { ok: true, outcome: "ok", car_number: "12가1235",
                       api_date: "20260805", date: "2026-08-05 (수)", ambiguous: false },
   "GET /history": { ok: true, rows: [{
-    invt_seq: 5001, car_number: "12가4567", invitation_date: "20260805",
+    invt_seq: 5001, car_number: "12가1235", invitation_date: "20260805",
     status: "RESERVE", is_active: true, park_name: "예시동 샘플아파트[출입통제A]",
   }] },
 });
 c.loadLots()
-  .then(() => c.register({ carNumber: "12가 4567", visitDate: "2026-08-05" }))
+  .then(() => c.register({ carNumber: "12가 1235", visitDate: "2026-08-05" }))
   .then((verdict) => out({
     state: verdict.state,
     retryable: verdict.retryable,
@@ -515,7 +515,7 @@ c.loadLots()
     assert got["state"] == "ok"
     assert got["rows"] == 1
     # The plate is normalized before it is sent, not only when it is echoed back.
-    assert got["sent"] == ["12가4567"]
+    assert got["sent"] == ["12가1235"]
     assert got["order"] == ["GET /lots", "POST /register", "GET /history"]
 
 
@@ -531,7 +531,7 @@ const { c } = harness({
   "GET /history": { ok: true, rows: [] },
 });
 c.loadLots()
-  .then(() => c.register({ carNumber: "12가4567", visitDate: "2026-08-05" }))
+  .then(() => c.register({ carNumber: "12가1235", visitDate: "2026-08-05" }))
   .then((v) => out({ state: v.state, retryable: v.retryable, detail: v.detail,
                      message: v.message }));
 """)
@@ -570,7 +570,7 @@ const { c, calls } = harness({
   "GET /history": { ok: true, rows: [] },
 });
 c.loadLots()
-  .then(() => c.register({ carNumber: "12가4567", visitDate: "2026-08-05" }))
+  .then(() => c.register({ carNumber: "12가1235", visitDate: "2026-08-05" }))
   .then((v) => out({ state: v.state,
                      refetched: calls.some((k) => k.path.startsWith("/history")) }));
 """)
@@ -597,7 +597,7 @@ c.loadLots()
 def test_register_refuses_without_a_selected_lot_and_sends_nothing():
     got = run_js(CONTROLLER_HARNESS + """
 const { c, calls } = harness({});
-c.register({ carNumber: "12가4567", visitDate: "2026-08-05" })
+c.register({ carNumber: "12가1235", visitDate: "2026-08-05" })
   .then((v) => out({ state: v.state, message: v.message, calls: calls.length }));
 """)
     assert got["state"] == "error"

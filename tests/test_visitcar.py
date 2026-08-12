@@ -71,7 +71,7 @@ SECOND_PARK_SEQ = 9002
 SECOND_PARK_NAME = "예시동 샘플아파트[출입통제B]"
 SECOND_STOR_SEQ = 100002
 
-PLATE = "12가4567"
+PLATE = "12가1235"
 MASKED = "12가****"
 
 
@@ -549,7 +549,7 @@ def test_no_log_line_carries_an_unmasked_plate(make_device):
     api = _StubApi()
     dev, _homey = make_device(api=api, notifications=FakeNotifications())
 
-    asyncio.run(dev.flow_register(car_number="12가 4567", visit_date=""))
+    asyncio.run(dev.flow_register(car_number="12가 1235", visit_date=""))
 
     assert any(MASKED in line for line in dev.logs)
     assert not any(PLATE in line for line in dev.logs)
@@ -563,7 +563,7 @@ def test_the_notification_shows_the_full_plate(make_device):
     notifications = FakeNotifications()
     dev, _homey = make_device(api=api, notifications=notifications)
 
-    asyncio.run(dev.flow_register(car_number="12가 4567", visit_date=""))
+    asyncio.run(dev.flow_register(car_number="12가 1235", visit_date=""))
 
     assert PLATE in notifications.excerpts[0]
 
@@ -1322,10 +1322,10 @@ def test_lots_ok_still_describes_the_lot_these_tests_pair():
 
 FAV_NAME = "엄마차"
 FAV_NAME_2 = "아빠차"
-PLATE_2 = "34나7890"
+PLATE_2 = "12가1245"
 #: The maintainer's own example, and the reason `plate.normalize_plate` is on this path: a
 #: space. The site itself just rejects it.
-PLATE_WITH_SPACE = "12가 4567"
+PLATE_WITH_SPACE = "12가 1235"
 
 
 def _favorite_settings(*pairs) -> dict:
@@ -1351,7 +1351,7 @@ async def _save(dev, settings: dict):
     * **`set_settings` is refused for the duration of the hook.** `Device._on_settings` sets
       `_on_settings_pending` around the call and `Device.set_settings` raises while it is set —
       so an inline write-back cannot land. On the maintainer's hub it did not: `fav_plate_1`
-      stayed ``12가 3456`` and the refusal went into a log nobody was watching.
+      stayed ``12가 1236`` and the refusal went into a log nobody was watching.
     * **The loop keeps turning after the hook returns.** The write-back is a scheduled task, so
       a helper that stopped at `on_settings`'s return would report it as never happening.
     """
@@ -1389,7 +1389,7 @@ def test_a_pair_counts_only_when_both_halves_are_there_and_the_plate_validates()
 
 
 def test_the_plate_a_user_types_with_a_space_is_accepted_and_stored_without_one():
-    """`12가 4567` is the maintainer's own example. The vendor's site does not trim, it just
+    """`12가 1235` is the maintainer's own example. The vendor's site does not trim, it just
     refuses — so a feature that inherited that would fail on the first favourite anyone enters.
     """
     favorites, rejected = device_mod.read_favorites(
@@ -1420,8 +1420,8 @@ def test_a_rejected_slot_is_named_in_the_log_with_the_plate_masked(make_device):
 def test_a_device_shows_exactly_as_many_buttons_as_it_has_pairs(make_device, count):
     """The whole reason ten capabilities are declared statically but added at runtime: a
     device with two favourites must not show ten buttons, eight of them dead."""
-    plates = [PLATE, PLATE_2, "56다1234", "임1234", "외교123456",
-              "78마9012", "90바3456", "11사7890", "22아1234", "33자5678"]
+    plates = [PLATE, PLATE_2, "12가1244", "임1234", "외교123456",
+              "12가1243", "12가1242", "12가1249", "12가1248", "12가1247"]
     dev, _homey = make_device(
         api=_StubApi(lot_rows=[_row()]),
         settings=_favorite_settings(
@@ -1519,14 +1519,14 @@ def test_a_plate_broken_after_the_fact_also_takes_the_button_away(make_device):
 # The write itself is old; **the deferral is the fix**. It has to happen after `on_settings`
 # returns, because the SDK refuses it while the hook is pending (`_save` models that refusal, and
 # `conftest.Device._set_settings` raises the SDK's own sentence). Inline, on the maintainer's hub,
-# `fav_plate_1` stayed ``12가 3456`` — space included — while the log recorded a failure nobody
+# `fav_plate_1` stayed ``12가 1236`` — space included — while the log recorded a failure nobody
 # was reading. Two properties are asserted separately because they fail separately: that the
 # value ends up normalized, and that the write did not happen inside the window.
 
 
 def test_on_settings_writes_the_normalized_plate_back_so_the_user_sees_it(make_device):
     """The one deliberate runtime **settings** write in the app (the store-write invariant is a
-    different object and still holds). A user who saves `12가 4567` and sees it unchanged has no
+    different object and still holds). A user who saves `12가 1235` and sees it unchanged has no
     way to tell whether the space mattered."""
     dev, _homey = make_device(api=_StubApi(lot_rows=[_row()]))
 
@@ -1564,7 +1564,7 @@ def test_the_write_back_is_deferred_until_the_hook_has_returned(make_device):
 
 def test_the_button_appears_on_the_same_save_that_the_write_is_deferred_from(make_device):
     """Deferring the *write* must not defer the *feature*. The reconcile runs against the
-    normalized dict in memory, so `12가 4567` produces a working button on the save it was typed
+    normalized dict in memory, so `12가 1235` produces a working button on the save it was typed
     on rather than on the next one — the visible write-back is only about the user seeing what
     was stored."""
     api = _StubApi()
@@ -1585,7 +1585,7 @@ def test_a_second_save_supersedes_a_pending_write_rather_than_racing_it(make_dev
 
     async def _two_saves():
         first = _favorite_settings((1, FAV_NAME, PLATE_WITH_SPACE))
-        second = _favorite_settings((1, FAV_NAME, "34나 7890"))
+        second = _favorite_settings((1, FAV_NAME, "12가 1245"))
         dev.settings = dict(first)
         await dev.on_settings({"newSettings": dict(first)})
         dev.settings = dict(second)
@@ -1740,7 +1740,7 @@ def test_on_settings_re_reads_the_settings_when_it_can_tell_nothing(make_device)
 
 
 def test_pressing_a_button_registers_that_plate_for_today_in_kst(make_device):
-    """The request, end to end: press `[엄마차 방문 등록]`, `12가4567` is registered for today.
+    """The request, end to end: press `[엄마차 방문 등록]`, `12가1235` is registered for today.
     `visit_date` reaches `register` as `None`, so the day is resolved by `dates.today_kst()` on
     the same path every other register on this device takes."""
     api = _StubApi()

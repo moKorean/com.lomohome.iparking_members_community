@@ -57,7 +57,7 @@ from iparking_lib.iparking.client import (
 )
 from iparking_lib.iparking.plate import InvalidPlateError
 
-PLATE = "12가3456"
+PLATE = "12가1236"
 
 
 def _offset(days: int) -> tuple[str, str]:
@@ -443,11 +443,11 @@ def test_both_sides_are_normalized_before_being_compared(make_api, no_sleep):
     api, _stub, _ = make_api({
         OAUTH_URL: login_ok(),
         REGISTER_URL: urllib.error.URLError("reset"),
-        HISTORY_URL: history_ok((("12가​3456", DATE, "RESERVE"),)),
+        HISTORY_URL: history_ok((("12가​1236", DATE, "RESERVE"),)),
     })
 
     # User input carrying an ordinary space, too, so both sides are dirty.
-    assert register(api, plate="12가 3456") == "already_registered"
+    assert register(api, plate="12가 1236") == "already_registered"
 
 
 def test_matching_is_client_side_and_ignores_unrelated_rows(make_api, no_sleep):
@@ -461,7 +461,7 @@ def test_matching_is_client_side_and_ignores_unrelated_rows(make_api, no_sleep):
         OAUTH_URL: login_ok(),
         REGISTER_URL: urllib.error.URLError("reset"),
         HISTORY_URL: history_ok((
-            ("12가4567", DATE, "RESERVE"),        # a different car, active
+            ("12가1235", DATE, "RESERVE"),        # a different car, active
             (PLATE, FUTURE, "RESERVE"),            # right car, wrong date
         )),
     })
@@ -486,7 +486,7 @@ def test_matching_rows_normalizes_the_plate_it_is_given_too():
     rows = [HistoryRow(1, PLATE, DATE, "RESERVE", "lot")]
 
     # A space, an ideographic space, and a zero-width space — none of them visible.
-    for dirty in ("12가 3456", "12가　3456", "12가​3456"):
+    for dirty in ("12가 1236", "12가　1236", "12가​1236"):
         matching = client_module.IparkingApi.matching_rows(rows, dirty, DATE)
         assert [r.invt_seq for r in matching] == [1], f"failed for {dirty!r}"
 
@@ -722,7 +722,7 @@ def test_a_verdict_for_another_car_does_not_override_our_top_level_success(make_
     """A row for somebody else's plate says nothing about ours, and `0000` says ours worked."""
     api, _stub, _ = make_api({
         OAUTH_URL: login_ok(),
-        REGISTER_URL: per_car("FAIL", plate="34나5678"),
+        REGISTER_URL: per_car("FAIL", plate="12가1237"),
     })
 
     assert register(api) == "ok"

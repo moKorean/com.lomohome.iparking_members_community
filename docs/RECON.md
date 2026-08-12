@@ -173,7 +173,7 @@ value never changes and it duplicated the device's own name. The device's sensor
 {"parkSeq":9001,"storSeq":100001,
  "userId":"<client_id>","userName":"<memb_name>",
  "invitationDate":"20260805",
- "invitationInfoList":[{"carNumber":"12가4567","memo":"",
+ "invitationInfoList":[{"carNumber":"12가1235","memo":"",
                         "mobile1":"010","mobile2":"1234","mobile3":"5678"}]}
 ```
 - `invitationDate`: `yyyyMMdd`, no separators (UI does `.replace(/\./g,'')`).
@@ -194,7 +194,7 @@ Verified response:
  "resultData":{
    "total":[{"inot_status":"RESERVE","cnt":n},{"inot_status":"IN","cnt":n}],
    "invitationList":[{"invitation_date":"20260501","invt_seq":3184553,
-                      "car_number":"12가3456","inot_status":"RESERVE",
+                      "car_number":"12가1236","inot_status":"RESERVE",
                       "park_name":"예시동 샘플아파트[출입통제A]","seq_num":1.0}]}}
 ```
 - `inot_status`: `RESERVE` 미입차 / `IN` 주차중 / `OUT` 출차 / `CANCEL` 취소.
@@ -250,7 +250,7 @@ Accepts `12가1234`, `123가1234`, `서울12가1234`, `임1234`, `임123456`, `�
 UI hint text: `예시) 12가1234, 임1234, 임123456, 외교123456`.
 
 **User requirement:** strip *all* whitespace before validating/sending —
-`"12가 4567"` → `"12가4567"`. (The site itself does **not** do this; it just rejects.)
+`"12가 1235"` → `"12가1235"`. (The site itself does **not** do this; it just rejects.)
 
 ## Result codes worth mapping (from `Ajax.resultCode`)
 
@@ -312,7 +312,7 @@ failure indistinguishable from a bad password.
 **Bodies are `JSON.stringify` byte-exact:** no space after `:` or `,`
 (`separators=(",", ":")`), and **no `\uXXXX` escaping** (`ensure_ascii=False`). The
 Hangul cases exist to pin that second point — `ensure_ascii=True` would turn
-`12가4567` into `12가4567`, changing the plaintext's bytes *and* its length, which
+`12가1234` into `12\uac001234`, changing the plaintext's bytes *and* its length, which
 lands it in a different PKCS#7 bucket.
 
 **None of these carries real account data.** The register bodies use `999동9999호` rather
@@ -332,19 +332,19 @@ S1F2ZVpPeUZYblhNUFplTlJ6RDVvRGRxZWVUSklYUUh1cGdueGZ5dFZIUFdMRlRsWjkrUytySkhWcyt0
 ### A.2 `plate_hangul` — 25 bytes ≡ 9 mod 16
 
 ```
-{"carNumber":"12가4567"}
+{"carNumber":"12가1234"}
 ```
 ```
-cXBqeUpKVXhxbHVnb2NELzd6QTg4dENYWEo5OXIvc0JvYjNmaXpUQ3ByOD0=
+cXBqeUpKVXhxbHVnb2NELzd6QTg4dWRGbVZhQ3RQdC8vaEtiYnowNzZmcz0=
 ```
 
 ### A.3 `register` — 221 bytes ≡ 13 mod 16 (the §3 body shape)
 
 ```
-{"parkSeq":9001,"storSeq":100001,"userId":"iparking-dev","userName":"999동9999호","invitationDate":"20260805","invitationInfoList":[{"carNumber":"12가4567","memo":"","mobile1":"010","mobile2":"1234","mobile3":"5678"}]}
+{"parkSeq":9001,"storSeq":100001,"userId":"iparking-dev","userName":"999동9999호","invitationDate":"20260805","invitationInfoList":[{"carNumber":"12가1234","memo":"","mobile1":"010","mobile2":"1234","mobile3":"5678"}]}
 ```
 ```
-a2g5OE5yTGlIamg2cERvVDRGSmpTaWwrVXk3eHpadlVId253U0hteEJ6cHBTWFdoRWNpZ0NNSGQ4ME4yajd1ckI4WWUvdlZVMUQwSVVhSGxhdWovVGpIRDlsWEtyWXp1Y1hQNTArTEJxTjJpMUdDVi9JZUlDc3hRc1VMd0VwMlNaSzVpcE90S3JjUm13N3FKSWJLK2FjeXRVMXUxTHB3WW91ZDBlb0NoMjR0VDlXZS96aVgvWTZoTW1FOVR3QUIyeHNTeWZoTVFrYnd2N1llZ0hmeUdnK0IwTUFGWU1tVmtLSlptVkN6VDY0eWlGQ3Q5b0hKeTZPZCt0QmcrSHJvQ09SS2RzNDJJZmNVNTVuTlRVZGVvWnVIMTJkdSt4OUdmWWJUZ0pUdXdQcXM9
+a2g5OE5yTGlIamg2cERvVDRGSmpTaWwrVXk3eHpadlVId253U0hteEJ6cHBTWFdoRWNpZ0NNSGQ4ME4yajd1ckI4WWUvdlZVMUQwSVVhSGxhdWovVGpIRDlsWEtyWXp1Y1hQNTArTEJxTjJpMUdDVi9JZUlDc3hRc1VMd0VwMlNaSzVpcE90S3JjUm13N3FKSWJLK2FjeXRVMXUxTHB3WW91ZDBlb0NoMjR0VDlXZS96aVgvWTZoTW1FOVR3QUIyQnVFTHlLQVFuZFVRUDUvcTNiR3RWejZNR01jb1J2cXk2dUNOcnNTWWtETndtYm93bURydDFPd2lOUnNkQUV5VXdYZGVacWYzTzd5Q1J2MGdWcFF1R2w5UzMxdjNXRXZaWnZjL0tSSThoVGM9
 ```
 
 ### A.4 `register_block_aligned` — 224 bytes ≡ **0** mod 16
@@ -357,10 +357,10 @@ breaks `POST /invitations` **only** for plates whose JSON happens to hit a 16-by
 multiple, surfacing later as a partial per-car result nobody can reproduce.
 
 ```
-{"parkSeq":9001,"storSeq":100001,"userId":"iparking-dev","userName":"999동9999호","invitationDate":"20260805","invitationInfoList":[{"carNumber":"12가4567","memo":"abc","mobile1":"010","mobile2":"1234","mobile3":"5678"}]}
+{"parkSeq":9001,"storSeq":100001,"userId":"iparking-dev","userName":"999동9999호","invitationDate":"20260805","invitationInfoList":[{"carNumber":"12가1234","memo":"abc","mobile1":"010","mobile2":"1234","mobile3":"5678"}]}
 ```
 ```
-a2g5OE5yTGlIamg2cERvVDRGSmpTaWwrVXk3eHpadlVId253U0hteEJ6cHBTWFdoRWNpZ0NNSGQ4ME4yajd1ckI4WWUvdlZVMUQwSVVhSGxhdWovVGpIRDlsWEtyWXp1Y1hQNTArTEJxTjJpMUdDVi9JZUlDc3hRc1VMd0VwMlNaSzVpcE90S3JjUm13N3FKSWJLK2FjeXRVMXUxTHB3WW91ZDBlb0NoMjR0VDlXZS96aVgvWTZoTW1FOVR3QUIyeHNTeWZoTVFrYnd2N1llZ0hmeUdnMks3cUM0OEtsR3FLRCtOeVNWL1pnelhRcGduMGg0dGYwcG9IdmVWTWREQS80YkpsRnZieXo5MVpiUWpxT3I4NlRkYkFVb3JrWE5valY1cTV5dkFPTno3cGZMbkQrRUhuVWtSeGluVnBvVjQ=
+a2g5OE5yTGlIamg2cERvVDRGSmpTaWwrVXk3eHpadlVId253U0hteEJ6cHBTWFdoRWNpZ0NNSGQ4ME4yajd1ckI4WWUvdlZVMUQwSVVhSGxhdWovVGpIRDlsWEtyWXp1Y1hQNTArTEJxTjJpMUdDVi9JZUlDc3hRc1VMd0VwMlNaSzVpcE90S3JjUm13N3FKSWJLK2FjeXRVMXUxTHB3WW91ZDBlb0NoMjR0VDlXZS96aVgvWTZoTW1FOVR3QUIyQnVFTHlLQVFuZFVRUDUvcTNiR3RWenZyNG5tT2RqamlmTFRwdmNibFhTVFhVRzFPZGdUbVlBVXpMUzJPNFhmQmRmMndwbEJJUDczR3JBQzZ5Z0dxVkZydGd1Q094YlMrQXMyeDluWUYyeWF5YWcvNldBRmRKa0Nzd1FudVZFbUE=
 ```
 
 ### A.5 Note on the AES test anchors

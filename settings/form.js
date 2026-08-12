@@ -297,7 +297,7 @@
    * this bug.
    *
    * Validation stays on the Python side. The page normalizes only so the user *sees*
-   * `12가 4567` become `12가4567` on blur — the vendor's site silently rejects the spaced form
+   * `12가 1234` become `12가1234` on blur — the vendor's site silently rejects the spaced form
    * without ever saying that a space is the problem.
    */
   function normalizePlate(value) {

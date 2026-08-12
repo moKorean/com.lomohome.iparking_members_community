@@ -392,7 +392,7 @@ def test_the_log_never_contains_the_password_token_or_address(make_api):
         {
             OAUTH_URL: login_ok(memb_name="999동9999호", token="secret-token-uuid"),
             LOTS_URL: lots_ok(),
-            HISTORY_URL: history_ok((("12가3456", "20260805", "RESERVE"),)),
+            HISTORY_URL: history_ok((("12가1236", "20260805", "RESERVE"),)),
         },
         password="hunter2-secret",
     )
@@ -404,7 +404,7 @@ def test_the_log_never_contains_the_password_token_or_address(make_api):
     assert "hunter2-secret" not in blob
     assert "secret-token-uuid" not in blob
     assert "999동9999호" not in blob
-    assert "12가3456" not in blob
+    assert "12가1236" not in blob
 
 
 def test_the_token_length_is_logged_but_never_its_value(make_api):
@@ -547,7 +547,7 @@ def test_register_is_refused_when_the_account_may_not_register(make_api):
     })
 
     with pytest.raises(NotPermittedError) as caught:
-        asyncio.run(api.register(car_number="12가4567", park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+        asyncio.run(api.register(car_number="12가1235", park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
 
     assert "권한이 없습니다" in str(caught.value)
     # The gate is before the write, so nothing was sent to the register endpoint.
@@ -566,7 +566,7 @@ def test_per_store_permission_is_read_per_store_not_from_the_first_entry(make_ap
     assert api._entry_for(STOR_SEQ).can_register is True
     assert api._entry_for(forbidden).can_register is False
     with pytest.raises(NotPermittedError):
-        asyncio.run(api.register(car_number="12가4567", park_seq=PARK_SEQ, stor_seq=forbidden))
+        asyncio.run(api.register(car_number="12가1235", park_seq=PARK_SEQ, stor_seq=forbidden))
 
 
 def test_an_unknown_store_is_a_clean_error(make_api):
@@ -592,14 +592,14 @@ def test_history_rows_are_parsed_with_both_sides_normalized(make_api):
     api, _stub, _ = make_api({
         OAUTH_URL: login_ok(),
         HISTORY_URL: history_ok((
-            ("12가 3456", "20260805", "RESERVE"),
-            ("12가4567", "20260806", "cancel"),
+            ("12가 1236", "20260805", "RESERVE"),
+            ("12가1235", "20260806", "cancel"),
         )),
     })
 
     rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
 
-    assert [r.car_number for r in rows] == ["12가3456", "12가4567"]
+    assert [r.car_number for r in rows] == ["12가1236", "12가1235"]
     assert [r.status for r in rows] == ["RESERVE", "CANCEL"]
     assert rows[0].is_active is True
     assert rows[1].is_active is False
@@ -684,14 +684,14 @@ def test_history_pages_until_it_has_every_row_the_server_counted(make_api):
     api, stub, _ = make_api({
         OAUTH_URL: login_ok(),
         HISTORY_URL: [
-            history_ok((("12가1111", "20260501", "OUT"),), total_cnt=2, seq_base=100),
-            history_ok((("12가2222", "20261001", "RESERVE"),), total_cnt=2, seq_base=200),
+            history_ok((("12가1238", "20260501", "OUT"),), total_cnt=2, seq_base=100),
+            history_ok((("12가1241", "20261001", "RESERVE"),), total_cnt=2, seq_base=200),
         ],
     })
 
     rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
 
-    assert [r.car_number for r in rows] == ["12가1111", "12가2222"]
+    assert [r.car_number for r in rows] == ["12가1238", "12가1241"]
     pages = [crypto.decode_body(b)["current_page"] for b in stub.bodies_for(HISTORY_URL)]
     assert pages == [1, 2]
 
@@ -699,13 +699,13 @@ def test_history_pages_until_it_has_every_row_the_server_counted(make_api):
 def test_history_stops_when_the_server_ignores_current_page(make_api):
     """Both pages answer with the same rows — the shape a server that does not honour
     `current_page` produces. Repeating them forever is the failure this must not have."""
-    page = history_ok((("12가1111", "20260501", "OUT"),), total_cnt=99, seq_base=100)
+    page = history_ok((("12가1238", "20260501", "OUT"),), total_cnt=99, seq_base=100)
 
     api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: [page, page, page]})
 
     rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
 
-    assert [r.car_number for r in rows] == ["12가1111"]
+    assert [r.car_number for r in rows] == ["12가1238"]
     assert len(stub.bodies_for(HISTORY_URL)) == 2
 
 
@@ -728,7 +728,7 @@ def test_history_never_exceeds_the_page_guard(make_api):
 def test_a_missing_total_count_reads_as_this_is_everything(make_api):
     """No `totalCnt` must mean one request, not a loop against a server that never said how
     much there was."""
-    envelope_without_total = history_ok((("12가1111", "20260501", "OUT"),))
+    envelope_without_total = history_ok((("12가1238", "20260501", "OUT"),))
     envelope_without_total.pop("totalCnt")
 
     api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: envelope_without_total})
@@ -744,14 +744,14 @@ def test_an_unparseable_history_row_is_skipped_rather_than_fatal(make_api):
         OAUTH_URL: login_ok(),
         HISTORY_URL: history_ok((
             "not-a-dict",
-            {"car_number": "12가4567", "invitation_date": "20260805",
+            {"car_number": "12가1235", "invitation_date": "20260805",
              "inot_status": "RESERVE", "invt_seq": 1},
         )),
     })
 
     rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
 
-    assert [r.car_number for r in rows] == ["12가4567"]
+    assert [r.car_number for r in rows] == ["12가1235"]
 
 
 # --- count_registered_on: the 오늘 등록 count's whole rule ----------------------
@@ -761,7 +761,7 @@ def test_an_unparseable_history_row_is_skipped_rather_than_fatal(make_api):
 
 
 def _row(seq: int, *, date: str = "20260805", status: str = "RESERVE") -> HistoryRow:
-    return HistoryRow(invt_seq=seq, car_number="12가4567", invitation_date=date,
+    return HistoryRow(invt_seq=seq, car_number="12가1235", invitation_date=date,
                       status=status, park_name="예시동 샘플아파트[출입통제A]")
 
 
@@ -809,7 +809,7 @@ def test_aggregate_counts_stay_empty_because_the_server_sends_empty(make_api):
     """`resultData.total` was `[]` even on a 43-record range — verified twice. It is
     optional display metadata, never a status aggregate — which is why the 오늘 등록 count is
     derived from the rows by `count_registered_on` and never from this field."""
-    assert IparkingApi.aggregate_counts(history_ok((("12가4567", "20260805", "IN"),))) == []
+    assert IparkingApi.aggregate_counts(history_ok((("12가1235", "20260805", "IN"),))) == []
     assert IparkingApi.aggregate_counts(
         history_ok((), total=({"inot_status": "IN", "cnt": 2},))
     ) == [{"inot_status": "IN", "cnt": 2}]
@@ -840,12 +840,12 @@ def test_a_reset_on_the_history_read_retries_and_then_succeeds(make_api):
     """`POST /invitations/list` — a POST that is a read, and therefore retryable."""
     api, stub, _ = make_api({
         OAUTH_URL: login_ok(),
-        HISTORY_URL: [reset(), history_ok((("12가4567", "20260805", "RESERVE"),))],
+        HISTORY_URL: [reset(), history_ok((("12가1235", "20260805", "RESERVE"),))],
     })
 
     rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
 
-    assert [r.car_number for r in rows] == ["12가4567"], "the retry produced the real answer"
+    assert [r.car_number for r in rows] == ["12가1235"], "the retry produced the real answer"
     assert stub.count(HISTORY_URL) == 2
     assert len(stub.backoffs) == 1
 
@@ -955,7 +955,7 @@ def test_detail_is_a_get_with_no_body(make_api):
     url = f"{MEMBERS_ROOT}/invitations/3184553"
     api, stub, _ = make_api({
         OAUTH_URL: login_ok(),
-        url: envelope("0000", resultData={"car_number": "12가4567", "inot_status": "RESERVE"}),
+        url: envelope("0000", resultData={"car_number": "12가1235", "inot_status": "RESERVE"}),
     })
 
     detail = asyncio.run(api.detail(3184553))

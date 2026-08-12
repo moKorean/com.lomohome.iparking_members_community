@@ -145,6 +145,24 @@ flatten it into "everything is insecure" or drop it into "everything is fine":
   servers.
 - **Registering a visitor vehicle acts on a real building's access-control system.**
 
+## Sample plates — one synthetic family, enforced
+
+Every example plate is `12가1234`, or `123가1234` where a three-digit prefix is the point.
+Tests that must tell two vehicles apart vary **only the trailing digits** — `12가1235`,
+`12가1236`, … — so the family reads as generated rather than observed.
+
+The reason is not tidiness: **any string shaped `NN가NNNN` may be a real car.** Nothing marks
+`34나5678` as invented, and this repo is public. `tests/test_sample_plates.py` scans the
+working tree (tracked + untracked-not-ignored) and fails with file and line on anything
+outside the family; it exempts `NNN동NNNN호`, which is a 세대 address, and the deliberately
+invalid fixtures (`1234가1234`, `12가45678`) via lookarounds.
+
+`docs/RECON.md` Appendix A is the trap here. Its plaintexts are prose and its envelopes are
+base64, so a rename touches one and not the other — which happened, and the appendix test
+only checked the ciphertext, so it stayed green while the document claimed one body encrypts
+to another body's envelope. That test now asserts both halves. **To change a sample plate in
+the appendix, edit `scripts/gen_aes_fixtures.sh` and re-run it** — never the document alone.
+
 ## Never logged
 
 The password in any form; the `access_token` value (presence/length only); raw request
