@@ -1470,13 +1470,17 @@ def test_the_generated_images_are_newer_than_the_art_they_come_from():
     a surprise on the store page.
     """
     pairs = [
-        (ROOT / "docs/app-image.svg", ROOT / "assets/images"),
-        (ROOT / "docs/device-image-visitcar.svg", ROOT / "drivers/visitcar/assets/images"),
+        # The app image is a viewBox crop over a photograph, so **both** files are sources:
+        # re-framing edits the SVG, re-shooting replaces the JPEG, and either one alone
+        # leaves the shipped PNGs stale.
+        (ROOT / "assets/images", [ROOT / "docs/app-image.svg", ROOT / "docs/app-image.jpg"]),
+        (ROOT / "drivers/visitcar/assets/images", [ROOT / "docs/device-image-visitcar.svg"]),
     ]
-    for source, folder in pairs:
+    for folder, sources in pairs:
+        newest = max(source.stat().st_mtime for source in sources)
         for image in sorted(folder.glob("*.png")):
-            assert image.stat().st_mtime >= source.stat().st_mtime, (
-                f"{image.relative_to(ROOT)} is older than {source.relative_to(ROOT)} — "
+            assert image.stat().st_mtime >= newest, (
+                f"{image.relative_to(ROOT)} is older than its source art — "
                 "run `python3 scripts/make_images.py`"
             )
 

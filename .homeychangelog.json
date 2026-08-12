@@ -60,7 +60,7 @@
     "en": "Added a Flow action that returns your booked visitor vehicles as text. Give it a date to list that day alone, or leave the date empty to gather everything still to come. The result comes back as two tags — the list itself and a count — so you can read it out in a notification or a spoken message, or branch on how many there are. The device values are now refreshed every ten minutes instead of hourly, so \"parked now\" is at most ten minutes behind."
   },
   "0.3.2": {
-    "ko": "앱 스토어 페이지의 그림을 새로 그렸습니다. 앱 아이콘이 기기 아이콘과 달라졌고, 소개 이미지는 아파트 단지 주차장 그림으로, 기기 이미지는 주차를 뜻하는 P 로 바뀌었습니다. 앱 동작에는 변화가 없습니다.",
-    "en": "Redrew the App Store artwork. The app icon is now distinct from the device icon, the store picture shows an apartment complex's parking area, and the device picture is a plain P for parking. Nothing about how the app works has changed."
+    "ko": "앱 스토어 페이지의 그림을 새로 했습니다. 소개 이미지는 실제 아이파킹이 설치된 아파트 단지 주차장 사진으로 바뀌었고, 앱 아이콘은 기기 아이콘과 다른 그림이 되었으며, 기기 이미지는 주차를 뜻하는 P 가 되었습니다. 앱 동작에는 변화가 없습니다.",
+    "en": "Refreshed the App Store artwork. The store picture is now a photograph of a real iParking installation at an apartment complex, the app icon is distinct from the device icon, and the device picture is a plain P for parking. Nothing about how the app works has changed."
   }
 }

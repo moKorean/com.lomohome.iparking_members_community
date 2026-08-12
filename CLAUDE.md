@@ -199,13 +199,18 @@ App Store review (2026-08-13, approved with feedback) named all three. Keep them
 |---|---|---|
 | `assets/icon.svg` | identifies the **app** | was identical to the driver icon — now an apartment block with a parking sign |
 | `drivers/visitcar/assets/icon.svg` | identifies **one paired lot** on its tile | unchanged: barrier-and-car line art |
-| `docs/app-image.svg` → `assets/images/*.png` | the **store page** picture | "an illustration"; rebuilt as an apartment complex's lot at dusk with a marked visitor bay |
+| `docs/app-image.svg` + `docs/app-image.jpg` → `assets/images/*.png` | the **store page** picture | "an illustration"; now a **photograph** of a real iParking installation at an apartment complex, supplied by the maintainer. The SVG is only a viewBox crop frame over the JPEG — edit the four numbers to re-frame |
 | `docs/device-image-visitcar.svg` → `drivers/visitcar/assets/images/*.png` | the **device card** picture | also an illustration; now a plain P, which review suggested |
 
 **The app icon is deliberately not iParking's logo**, which is what review suggested. Every
 README states this app is unaffiliated, and shipping a third party's trademark in a published
 app is the maintainer's call, not an asset-file detail. Raise it with them rather than
 quietly adopting it.
+
+**The store photograph carries iParking's branding and was supplied by the maintainer**, who
+was told plainly that a third party's promotional image on a public listing is a rights
+question they own. It is used on their instruction. If it ever has to come out, the vector
+scene that stood there for one commit is in git history.
 
 **`assets/icon.svg` must never be made identical to the driver icon again.** It was, on an
 explicit request in v0.1.3, and that is exactly what review flagged;

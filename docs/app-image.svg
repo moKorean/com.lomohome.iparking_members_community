@@ -1,145 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="1000" height="700">
-  <!-- Source graphic for assets/images/{small,large,xlarge}.png (10:7, App Store sizes).
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 61 735 514" width="735" height="514">
+  <!-- Source for assets/images/{small,large,xlarge}.png (10:7, App Store sizes).
 
-       Rebuilt after App Store review: the previous version was a gate and a car floating on a
-       flat background — an illustration of a mechanism, not of what this app is for. Review
-       asked for something "more specifically representative", naming an apartment complex
-       parking area, so that is what this is: the residents' lot at an apartment block, at
-       dusk, with one bay marked for a visitor.
+       **This is a crop frame over a photograph, not artwork.** App Store review asked for
+       something more specifically representative than an illustration, naming an apartment
+       complex parking area; the maintainer supplied `app-image.jpg`, a real iParking
+       installation at one. A photograph is what review actually wanted, so the vector scene
+       that briefly stood here was dropped — it is in git history if it is ever needed back.
 
-       Every element earns its place. The towers with their lit windows are the *apartment*
-       part, which is the whole eligibility rule for this app — you need an account for your
-       own unit. The marked bay is the *visitor* part. The car is in that bay rather than
-       driving through a barrier, because what this app produces is a parked visitor, not an
-       animation of one arriving.
+       The crop is expressed as a viewBox rather than as a pre-cropped JPEG so the framing
+       stays editable and reviewable: change the four numbers, re-run
+       `scripts/make_images.py`, and every size follows. Nothing is hand-cropped per size.
 
-       No <text> and no external font: the P is a path, so this rasterizes identically
-       anywhere. -->
+       Framing: the source is 735x631 (ratio 1.165), the store wants 10:7 (1.429), so the
+       full width is kept and 117 px come off the height. The window is y 61..575 — the top
+       trims sky, the bottom stops just below the installation's red base rather than at the
+       image edge, which would have left a band of empty tarmac carrying nothing.
 
-  <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#123A5C"/>
-      <stop offset="0.62" stop-color="#1B4F72"/>
-      <stop offset="1" stop-color="#2A6A93"/>
-    </linearGradient>
-    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3C4654"/>
-      <stop offset="1" stop-color="#252C36"/>
-    </linearGradient>
-    <linearGradient id="lamp" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFE9BF" stop-opacity="0.20"/>
-      <stop offset="1" stop-color="#FFE9BF" stop-opacity="0"/>
-    </linearGradient>
-  </defs>
-
-  <rect width="1000" height="700" fill="url(#sky)"/>
-
-  <!-- ── apartment complex ─────────────────────────────────────────────────
-       Three blocks at different depths. The far one is washed toward the sky
-       colour so the row reads as distance rather than as a single flat wall. -->
-
-  <!-- far block -->
-  <g opacity="0.45">
-    <rect x="60" y="150" width="180" height="360" rx="10" fill="#0E2E4A"/>
-    <g fill="#7FA8C4" opacity="0.55">
-      <rect x="86" y="186" width="30" height="34" rx="4"/>
-      <rect x="136" y="186" width="30" height="34" rx="4"/>
-      <rect x="186" y="186" width="30" height="34" rx="4"/>
-      <rect x="86" y="252" width="30" height="34" rx="4"/>
-      <rect x="186" y="252" width="30" height="34" rx="4"/>
-      <rect x="86" y="318" width="30" height="34" rx="4"/>
-      <rect x="136" y="318" width="30" height="34" rx="4"/>
-      <rect x="136" y="384" width="30" height="34" rx="4"/>
-      <rect x="186" y="384" width="30" height="34" rx="4"/>
-    </g>
-  </g>
-
-  <!-- tall block -->
-  <rect x="262" y="86" width="216" height="424" rx="12" fill="#0B2438"/>
-  <rect x="262" y="86" width="216" height="14" rx="7" fill="#15405F"/>
-  <g fill="#F5C77E">
-    <rect x="292" y="130" width="34" height="38" rx="5"/>
-    <rect x="404" y="130" width="34" height="38" rx="5" opacity="0.28"/>
-    <rect x="348" y="130" width="34" height="38" rx="5" opacity="0.28"/>
-    <rect x="292" y="204" width="34" height="38" rx="5" opacity="0.28"/>
-    <rect x="348" y="204" width="34" height="38" rx="5"/>
-    <rect x="404" y="204" width="34" height="38" rx="5"/>
-    <rect x="292" y="278" width="34" height="38" rx="5"/>
-    <rect x="348" y="278" width="34" height="38" rx="5" opacity="0.28"/>
-    <rect x="404" y="278" width="34" height="38" rx="5" opacity="0.28"/>
-    <rect x="292" y="352" width="34" height="38" rx="5" opacity="0.28"/>
-    <rect x="348" y="352" width="34" height="38" rx="5"/>
-    <rect x="404" y="352" width="34" height="38" rx="5" opacity="0.28"/>
-    <rect x="292" y="426" width="34" height="38" rx="5"/>
-    <rect x="348" y="426" width="34" height="38" rx="5" opacity="0.28"/>
-    <rect x="404" y="426" width="34" height="38" rx="5"/>
-  </g>
-
-  <!-- near block -->
-  <rect x="500" y="176" width="196" height="334" rx="12" fill="#0B2438"/>
-  <rect x="500" y="176" width="196" height="12" rx="6" fill="#15405F"/>
-  <g fill="#F5C77E">
-    <rect x="528" y="214" width="32" height="36" rx="5" opacity="0.28"/>
-    <rect x="586" y="214" width="32" height="36" rx="5"/>
-    <rect x="644" y="214" width="32" height="36" rx="5" opacity="0.28"/>
-    <rect x="528" y="286" width="32" height="36" rx="5"/>
-    <rect x="586" y="286" width="32" height="36" rx="5" opacity="0.28"/>
-    <rect x="644" y="286" width="32" height="36" rx="5"/>
-    <rect x="528" y="358" width="32" height="36" rx="5" opacity="0.28"/>
-    <rect x="586" y="358" width="32" height="36" rx="5" opacity="0.28"/>
-    <rect x="644" y="358" width="32" height="36" rx="5"/>
-    <rect x="528" y="430" width="32" height="36" rx="5"/>
-    <rect x="586" y="430" width="32" height="36" rx="5"/>
-    <rect x="644" y="430" width="32" height="36" rx="5" opacity="0.28"/>
-  </g>
-
-  <!-- lamp post, and the light it throws over the marked bay -->
-  <rect x="860" y="196" width="12" height="316" rx="6" fill="#0B2438"/>
-  <path d="M866 196 h58 a10 10 0 0 1 0 20 h-58 z" fill="#0B2438"/>
-  <circle cx="918" cy="214" r="15" fill="#FFE9BF"/>
-  <path d="M918 226 L1000 512 H770 Z" fill="url(#lamp)"/>
-
-  <!-- ── the lot ───────────────────────────────────────────────────────── -->
-
-  <rect x="0" y="510" width="1000" height="190" fill="url(#ground)"/>
-  <rect x="0" y="510" width="1000" height="5" fill="#57616F"/>
-
-  <!-- bays, receding a little to the right so the ground has depth -->
-  <g stroke="#C7CEDA" stroke-width="7" stroke-linecap="round" opacity="0.5">
-    <line x1="56"  y1="700" x2="104" y2="546"/>
-    <line x1="266" y1="700" x2="286" y2="546"/>
-    <line x1="700" y1="700" x2="650" y2="546"/>
-    <line x1="906" y1="700" x2="832" y2="546"/>
-    <line x1="70"  y1="546" x2="930" y2="546" stroke-width="6"/>
-  </g>
-
-  <!-- the visitor bay: lit, painted, and the only one occupied -->
-  <path d="M286 546 H650 L700 700 H266 Z" fill="#FFE9BF" opacity="0.14"/>
-  <g stroke="#F5C77E" stroke-width="8" stroke-linecap="round" opacity="0.85">
-    <line x1="286" y1="546" x2="266" y2="700"/>
-    <line x1="650" y1="546" x2="700" y2="700"/>
-  </g>
-
-  <!-- Painted P, on the empty bay to the right where it is actually visible. The same
-       letterform as the driver image, scaled down — one P in the app, not two drawings of
-       one. It was briefly painted on the occupied bay instead, where the car covered it. -->
-  <g transform="translate(690 536) scale(0.216)" opacity="0.55">
-    <path fill="#C7CEDA" fill-rule="evenodd"
-          d="M356 168 h214 q186 0 186 176 t-186 176 h-104 v192 h-110 z
-             M466 280 v128 h100 q76 0 76 -64 t-76 -64 z" />
-  </g>
-
-  <!-- ── the visitor's car ─────────────────────────────────────────────── -->
-
-  <ellipse cx="520" cy="662" rx="176" ry="20" fill="#000000" opacity="0.30"/>
-  <g>
-    <path d="M416 596 q26 -62 84 -62 h46 q58 0 84 62 z" fill="#E9EDF3"/>
-    <path d="M446 590 q20 -40 58 -40 h38 q38 0 58 40 z" fill="#4E8CB5"/>
-    <rect x="380" y="592" width="286" height="64" rx="26" fill="#F4F6FA"/>
-    <rect x="470" y="608" width="108" height="20" rx="6" fill="#1B4F72"/>
-    <circle cx="440" cy="658" r="26" fill="#1B2430"/>
-    <circle cx="440" cy="658" r="10" fill="#8A93A2"/>
-    <circle cx="608" cy="658" r="26" fill="#1B2430"/>
-    <circle cx="608" cy="658" r="10" fill="#8A93A2"/>
-  </g>
+       Note the resolution: 735x514 upscales to 1000x700 for `xlarge`, about 1.36x, so that
+       size is a little soft. A larger original would fix it and nothing else would change. -->
+  <image xlink:href="app-image.jpg" x="0" y="0" width="735" height="631"/>
 </svg>
