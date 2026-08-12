@@ -37,17 +37,24 @@ from conftest import (
 
 from iparking_lib import const, i18n
 from iparking_lib.const import (
+    CAPABILITY_NEXT_VISIT,
     CAPABILITY_PARK_NAME,
+    CAPABILITY_PARKED_NOW,
     CAPABILITY_TODAY_COUNT,
+    CAPABILITY_TOMORROW_COUNT,
+    CAPABILITY_WEEK_COUNT,
+    COUNT_CAPABILITIES,
     FLOW_REGISTER_VISITOR,
     FLOW_REGISTER_VISITOR_TODAY,
     MAX_FAVORITES,
     MAX_POLL_FAILURES,
     POLL_BACKOFF_S,
+    POLL_DAYS_AHEAD,
     STORE_LOT_ID,
     STORE_PARK_NAME,
     STORE_PARK_SEQ,
     STORE_STOR_SEQ,
+    WEEK_DAYS,
     favorite_name_setting,
     favorite_plate_setting,
     quick_capability,
@@ -197,7 +204,7 @@ def make_device(make_homey):
     `capabilities` defaults to the one capability `driver.compose.json` declares.
     """
 
-    def _make(*, api=None, store=None, capabilities=(CAPABILITY_TODAY_COUNT,), ticks=30,
+    def _make(*, api=None, store=None, capabilities=COUNT_CAPABILITIES, ticks=30,
               notifications=None, settings=None, sdk_spelling="snake", sdk_awaitable=False,
               add_capability_error=None):
         homey = make_homey(api=api, notifications=notifications)
@@ -759,14 +766,23 @@ def test_a_row_for_another_day_is_not_counted_even_if_the_server_sends_it(make_d
     assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
 
 
-def test_a_poll_asks_for_a_single_day_window(make_device):
-    """One day, so the response stays small — and `startDate == endDate == today`, from
-    `dates.today_api()` rather than from anything cached."""
+def test_a_poll_asks_from_today_forward(make_device):
+    """`startDate == today`, `endDate == today + POLL_DAYS_AHEAD`, both from `dates.today_api()`
+    rather than from anything cached.
+
+    The window was one day while today's count was the only thing on the tile. 다음 방문 예정
+    cannot be answered from one day — the honest answer may be three weeks out — so it reaches
+    forward now. It must **not** reach backward: past visits change none of these values, and a
+    backward window would double the response for nothing.
+    """
     api = _StubApi(history_rows=[_hist(1)])
     dev, _homey = make_device(api=api)
 
     call = api.history_calls[-1]
-    assert call["start_date"] == call["end_date"] == dates.today_api()
+    today = dates.today_api()
+    assert call["start_date"] == today
+    assert call["end_date"] == dates.shift_api(today, POLL_DAYS_AHEAD)
+    assert call["end_date"] > call["start_date"]
     assert call["park_seq"] == PARK_SEQ
     assert call["stor_seq"] == STOR_SEQ
 
@@ -879,9 +895,102 @@ def test_a_device_paired_before_the_count_existed_adopts_it(make_device):
     """
     dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]), capabilities=())
 
-    assert CAPABILITY_TODAY_COUNT in dev.get_capabilities()
+    assert set(COUNT_CAPABILITIES) <= set(dev.get_capabilities())
     assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
-    assert any("adding the 오늘 등록 sensor" in line for line in dev.logs)
+    assert any(f"adding {CAPABILITY_TODAY_COUNT}" in line for line in dev.logs)
+
+
+# --- the other four tile values, all from the same read ----------------------
+#
+# Every one of these comes out of the request the poll was already making. That is the whole
+# design: five sensors, one request, unchanged traffic budget.
+
+
+def test_tomorrow_is_counted_separately_from_today(make_device):
+    tomorrow = dates.shift_api(dates.today_api(), 1)
+    dev, _homey = make_device(api=_StubApi(history_rows=[
+        _hist(1),
+        _hist(2, date=tomorrow),
+        _hist(3, date=tomorrow),
+    ]))
+
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 1
+    assert dev.get_capability_value(CAPABILITY_TOMORROW_COUNT) == 2
+
+
+def test_the_week_window_is_rolling_and_includes_today(make_device):
+    """`WEEK_DAYS` from today inclusive — not a calendar week.
+
+    The boundary is asserted from both sides: the last day inside counts, the first day
+    outside does not. A calendar week would read 0 on a Sunday with visitors booked for
+    Monday, which is exactly when a glance at the tile matters.
+    """
+    today = dates.today_api()
+    dev, _homey = make_device(api=_StubApi(history_rows=[
+        _hist(1),
+        _hist(2, date=dates.shift_api(today, WEEK_DAYS - 1)),
+        _hist(3, date=dates.shift_api(today, WEEK_DAYS)),
+    ]))
+
+    assert dev.get_capability_value(CAPABILITY_WEEK_COUNT) == 2
+
+
+def test_parked_now_counts_only_vehicles_currently_inside(make_device):
+    """`IN` only. `OUT` is excluded **even though it is an active status** — a car that has
+    left is still a valid uncancelled registration, and is precisely what must not be counted
+    as present. `RESERVE` has not arrived yet."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[
+        _hist(1, status="IN"),
+        _hist(2, status="OUT"),
+        _hist(3, status="RESERVE"),
+        _hist(4, status="IN", date=dates.shift_api(dates.today_api(), 1)),
+    ]))
+
+    assert dev.get_capability_value(CAPABILITY_PARKED_NOW) == 1
+    # And the registration counts are unmoved by the same rows: a parked car is still expected.
+    assert dev.get_capability_value(CAPABILITY_TODAY_COUNT) == 3
+
+
+def test_next_visit_names_the_soonest_upcoming_day_and_plate(make_device):
+    today = dates.today_api()
+    dev, _homey = make_device(api=_StubApi(history_rows=[
+        _hist(1, date=dates.shift_api(today, 9), plate=PLATE_2),
+        _hist(2, date=dates.shift_api(today, 3), plate=PLATE),
+    ]))
+
+    value = dev.get_capability_value(CAPABILITY_NEXT_VISIT)
+
+    assert PLATE in value
+    assert dates.format_kst_human(dates.shift_api(today, 3)) in value
+    assert PLATE_2 not in value
+
+
+def test_next_visit_counts_today_as_still_upcoming(make_device):
+    """A visit booked for this afternoon has not happened yet. Skipping to tomorrow the
+    moment the date arrives would answer a question nobody asked."""
+    dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]))
+
+    assert dates.format_kst_human(dates.today_api()) in dev.get_capability_value(
+        CAPABILITY_NEXT_VISIT
+    )
+
+
+def test_next_visit_ignores_cancelled_rows(make_device):
+    """취소 leaves the row in the list with its date intact, so the tile would otherwise
+    advertise a visit that will never happen."""
+    today = dates.today_api()
+    dev, _homey = make_device(api=_StubApi(history_rows=[
+        _hist(1, date=dates.shift_api(today, 2), status="CANCEL"),
+        _hist(2, date=dates.shift_api(today, 6), plate=PLATE_2),
+    ]))
+
+    assert PLATE_2 in dev.get_capability_value(CAPABILITY_NEXT_VISIT)
+
+
+def test_next_visit_shows_a_dash_when_nothing_is_booked(make_device):
+    dev, _homey = make_device(api=_StubApi(history_rows=[]))
+
+    assert dev.get_capability_value(CAPABILITY_NEXT_VISIT) == device_mod.NO_UPCOMING_VISIT
 
 
 # --- updating the count without spending a request ----------------------------
@@ -1106,14 +1215,22 @@ def test_no_park_name_machinery_survives_anywhere(make_device):
         assert gone not in source, f"{gone} still lives in device.py"
 
 
-def test_the_only_capability_value_written_is_the_count(make_device):
-    """The push-button fix, guarded at the source. The tile buttons are `getable: false`, so there
-    is no value to write and nothing to un-latch — and the v0.1.3 `finally` that wrote `False`
-    back was the latch it claimed to be curing. Exactly one `_set` call may exist, and it is the
-    count's."""
-    source = (ROOT / "iparking_lib/visitcar/device.py").read_text(encoding="utf-8")
+def test_no_capability_value_is_written_outside_the_sensor_block(make_device):
+    """The push-button fix, guarded at the source. The tile buttons are `getable: false`, so
+    there is nothing to write and nothing to un-latch — and the v0.1.3 `finally` that wrote
+    `False` back was the latch it claimed to be curing.
 
-    assert source.count("await self._set(") == 1
+    Pinned by **where** the writes are rather than by counting them: five sensors means five
+    `_set` calls, so a bare count would have to be edited every time a sensor is added, and an
+    assertion edited on every change stops being an assertion. Every write must live in
+    `_apply_values`, which is the one place that turns history rows into tile values."""
+    source = (ROOT / "iparking_lib/visitcar/device.py").read_text(encoding="utf-8")
+    block = source.split("async def _apply_values(")[1].split("\n    async def ")[0]
+
+    writes = source.count("await self._set(")
+
+    assert writes == block.count("await self._set(") > 1, "a _set escaped _apply_values"
+    assert writes == len(COUNT_CAPABILITIES), "one write per sensor, and no others"
     assert "await self._set(CAPABILITY_TODAY_COUNT" in source
 
 
@@ -1150,7 +1267,7 @@ def test_the_park_name_capability_schema_is_gone_for_good():
     assert not (ROOT / ".homeycompose/capabilities/iparking_park_name.json").exists()
     assert const.CAPABILITY_PARK_NAME == "iparking_park_name"
     declared = {path.stem for path in (ROOT / ".homeycompose/capabilities").glob("*.json")}
-    assert declared == {CAPABILITY_TODAY_COUNT} | {
+    assert declared == set(COUNT_CAPABILITIES) | {
         quick_capability(index) for index in range(1, MAX_FAVORITES + 1)
     }
 
@@ -1260,7 +1377,8 @@ def test_the_driver_declares_exactly_the_today_count_sensor():
     )
     settings = {item["id"]: item for item in spec["settings"]}
 
-    assert spec["capabilities"] == [CAPABILITY_TODAY_COUNT]
+    # Order matters: it is the order the sensors are drawn in on the tile.
+    assert spec["capabilities"] == list(COUNT_CAPABILITIES)
     assert spec["class"] == "sensor"
     assert spec["connectivity"] == ["cloud"]
     assert sorted(settings) == ["favorites"]

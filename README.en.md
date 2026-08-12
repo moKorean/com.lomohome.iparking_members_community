@@ -68,12 +68,26 @@ The Homey app itself is © 2026 Geunwon Mo.
 
 - **Account sign-in** — sign in with your iParking MEMBERS ID/password from the app
   settings.
-- **"Expected today" sensor** — how many vehicles are **expected to visit today** at this
-  lot, as a device capability (`Expected today · 2 cars`), with Insights enabled. It refreshes
-  hourly (± 10 %) in a single request, updates immediately and at **no extra request** when this
-  app registers, cancels or reads the history, and rolls over to the new day at midnight KST.
-  **Cancelled registrations are not counted** — iParking's 취소 flips a row's status to `CANCEL`
-  rather than removing it, so counting them shows 6 on a day whose honest answer is 1.
+- **Five sensors on the device tile — one request** — the state of this lot, as device
+  capabilities.
+
+  | Sensor | What it says |
+  |---|---|
+  | Expected today | Visitor vehicles registered for today (`2 cars`) |
+  | Expected tomorrow | The same, one day on |
+  | Expected this week | The next 7 days **from today** — rolling, not a calendar week, so a Sunday evening still shows Monday's guests |
+  | Parked now | Visitor vehicles currently inside the complex. The counts say *expected*; this says *here* |
+  | Next visit | The soonest upcoming day and plate (`2026-08-15 (Sat) · 12가1234`) |
+
+  All five come out of **the same single read** — four extra sensors, and not one extra
+  request. They refresh hourly (± 10 %), update immediately and at **no extra request** when
+  this app registers, cancels or reads the history, and roll over at midnight KST. The counts
+  have Insights enabled.
+
+  **Cancelled registrations are not counted** — iParking's 취소 flips a row's status to
+  `CANCEL` rather than removing it, so counting them shows 6 on a day whose honest answer is
+  1. **"Parked now" excludes vehicles that have left** — a departed car is still a valid
+  registration, just not a present one.
 - **Register a visitor** — the app settings page (the app's primary UI) lets you pick a
   lot, enter a plate number and a visit date, and register. Whitespace in the plate is
   stripped automatically and the cleaned-up value is echoed back once you leave the field
@@ -122,6 +136,7 @@ a real building are two different claims.
 | Item | Status |
 | --- | --- |
 | Sign-in · "expected today" count sensor (with Insights) | **Verified on hardware** |
+| The four newer sensors (tomorrow, this week, parked now, next visit) | Supported — same read, same filters, but not yet watched on a real lot |
 | Visitor registration (settings page) | **Verified on hardware** |
 | Registration history · cancel (two-press) | **Verified on hardware** |
 | Frequent-vehicle buttons (20 device settings → up to 10 push buttons) | **Verified on hardware** |
@@ -155,6 +170,11 @@ Not defects in this app but properties of the server it talks to, and you will m
   "it arrived and only the reply was lost", so retrying could register the same vehicle twice.
   Instead the app re-queries to find out what happened, and if that cannot settle it either, it
   tells you the outcome is **uncertain** rather than guessing.
+- **"Parked now" can be up to an hour stale.** iParking offers no webhook and no push, so the
+  only way to notice a car entering is the hourly poll — and a visit that starts and ends
+  between two polls never appears at all. For the same reason there is **no "a visitor
+  arrived" Flow trigger**: making one prompt would mean polling hard enough to risk the vendor
+  blocking this client, which is a bad trade for a notification.
 - **Pressing a button on the device tile shows no toast.** The Homey SDK has no success-toast
   API — the whole surface was checked — so the outcome goes to the **timeline** instead.
   Registering from the app settings page does show an in-page toast.

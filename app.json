@@ -1,7 +1,7 @@
 {
   "_comment": "This file is generated. Please edit .homeycompose/app.json instead.",
   "id": "com.lomohome.iparking_members_community",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "compatibility": ">=13.0.0",
   "sdk": 3,
   "runtime": "python",
@@ -189,7 +189,11 @@
       },
       "class": "sensor",
       "capabilities": [
-        "iparking_today_count"
+        "iparking_today_count",
+        "iparking_tomorrow_count",
+        "iparking_week_count",
+        "iparking_parked_now",
+        "iparking_next_visit"
       ],
       "settings": [
         {
@@ -459,6 +463,36 @@
     }
   ],
   "capabilities": {
+    "iparking_next_visit": {
+      "type": "string",
+      "title": {
+        "ko": "다음 방문 예정",
+        "en": "Next visit"
+      },
+      "getable": true,
+      "setable": false,
+      "insights": false,
+      "uiComponent": "sensor",
+      "icon": "/assets/capabilities/visitcar.svg"
+    },
+    "iparking_parked_now": {
+      "type": "number",
+      "title": {
+        "ko": "현재 주차 중",
+        "en": "Parked now"
+      },
+      "units": {
+        "ko": "대",
+        "en": "cars"
+      },
+      "decimals": 0,
+      "min": 0,
+      "getable": true,
+      "setable": false,
+      "insights": true,
+      "uiComponent": "sensor",
+      "icon": "/assets/capabilities/visitcar.svg"
+    },
     "iparking_quick_1": {
       "type": "boolean",
       "title": {
@@ -584,6 +618,42 @@
       "title": {
         "ko": "오늘 방문 예정",
         "en": "Expected today"
+      },
+      "units": {
+        "ko": "대",
+        "en": "cars"
+      },
+      "decimals": 0,
+      "min": 0,
+      "getable": true,
+      "setable": false,
+      "insights": true,
+      "uiComponent": "sensor",
+      "icon": "/assets/capabilities/visitcar.svg"
+    },
+    "iparking_tomorrow_count": {
+      "type": "number",
+      "title": {
+        "ko": "내일 방문 예정",
+        "en": "Expected tomorrow"
+      },
+      "units": {
+        "ko": "대",
+        "en": "cars"
+      },
+      "decimals": 0,
+      "min": 0,
+      "getable": true,
+      "setable": false,
+      "insights": true,
+      "uiComponent": "sensor",
+      "icon": "/assets/capabilities/visitcar.svg"
+    },
+    "iparking_week_count": {
+      "type": "number",
+      "title": {
+        "ko": "이번 주 방문 예정",
+        "en": "Expected this week"
       },
       "units": {
         "ko": "대",

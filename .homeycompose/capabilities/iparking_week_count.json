@@ -1,0 +1,19 @@
+{
+  "$comment": "이번 주 방문 예정 — an inclusive ROLLING window of const.WEEK_DAYS starting today, not a calendar week. A calendar week reads 0 on a Sunday evening with three visitors booked for Monday, which is precisely when a glance at the tile matters. Same read, same filters, no extra request.",
+  "type": "number",
+  "title": {
+    "ko": "이번 주 방문 예정",
+    "en": "Expected this week"
+  },
+  "units": {
+    "ko": "대",
+    "en": "cars"
+  },
+  "decimals": 0,
+  "min": 0,
+  "getable": true,
+  "setable": false,
+  "insights": true,
+  "uiComponent": "sensor",
+  "icon": "/assets/capabilities/visitcar.svg"
+}

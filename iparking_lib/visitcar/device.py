@@ -1,37 +1,57 @@
-"""One paired parking lot: the 오늘 등록 sensor, its 자주 오는 차량 tile buttons, and the
-register write path.
+"""One paired parking lot: five tile sensors, the 자주 오는 차량 tile buttons, and the register
+write path.
 
-**The sensor is 오늘 등록된 차량 수 — how many vehicles are registered for today at this lot**
-(`iparking_today_count`). It replaced 주차장명 in v0.1.4, and the swap is the whole argument for
-the poll that refreshes it. 주차장명 was the lot's name: *also* the name Homey shows for the
-device, so the tile printed the same string twice, and constant for the lifetime of a pairing —
-24 requests a day to re-confirm it was waste, so it and its loop were deleted. This count changes
-whenever anybody registers a car, including on the vendor's own website where this app cannot see
-it happen. Polling a constant was waste; polling a count is what makes it true.
+**Five values, one request.** `iparking_today_count` (오늘 방문 예정),
+`iparking_tomorrow_count` (내일), `iparking_week_count` (rolling `WEEK_DAYS` from today),
+`iparking_parked_now` (현재 주차 중) and `iparking_next_visit` (다음 방문 예정) all come out
+of the same 등록 내역 read, so adding the last four cost no extra traffic — only a wider
+window. The poll budget is unchanged: still one request per tick.
 
-**`CANCEL` rows are not counted.** 취소 flips `inot_status` and leaves the row in the list, so a
-day's rows are frequently mostly cancellations — counting them showed 6 on the maintainer's own
-account where the honest answer was 1. The rule lives once, in `client.count_registered_on`, over
-the same `ACTIVE_STATUSES` set the register path's recovery re-query uses.
+The count replaced 주차장명 in v0.1.4, and that swap is the whole argument for the poll.
+주차장명 was the lot's name: *also* the name Homey shows for the device, so the tile printed
+the same string twice, and constant for the lifetime of a pairing — 24 requests a day to
+re-confirm it was waste. These values change whenever anybody registers a car, including on
+the vendor's own website where this app cannot see it happen. Polling a constant was waste;
+polling a count is what makes it true.
 
-**Three things keep the number honest**, and each is a defect avoided rather than a nicety:
+**`CANCEL` rows are not counted.** 취소 flips `inot_status` and leaves the row in the list, so
+a day's rows are frequently mostly cancellations — counting them showed 6 on the maintainer's
+own account where the honest answer was 1. The rule lives once, in
+`client.count_registered_between`, over the same `ACTIVE_STATUSES` set the register path's
+recovery re-query uses.
 
-1. **The date window is recomputed on every tick** from `dates.today_api()`, never cached at
-   `on_init`. A cached window would survive KST midnight and leave yesterday's count on the tile
-   until the app restarted — the tile would be wrong for a whole day and would look fine.
-2. **This app's own actions update it immediately**, at **zero extra requests**: a register from
-   a Flow card or a tile press refreshes it, and every settings-page history fetch feeds its rows
-   straight into the count (`note_history`), which is what covers the settings page's register
-   and cancel — the page re-reads the table after both. The poll is therefore only there to catch
-   registrations made elsewhere and the midnight rollover.
-3. **A one-day window** (`startDate == endDate == today`) keeps the response small, and the date
-   is asserted client-side anyway — see `count_registered_on`.
+**현재 주차 중 is `IN` only, and `OUT` is excluded despite being an active status.** A car
+that has left is still a valid uncancelled registration — which is what `ACTIVE_STATUSES`
+means — and is exactly what must not be counted as present.
+
+**Three things keep the numbers honest**, and each is a defect avoided rather than a nicety:
+
+1. **The window is recomputed on every tick** from `dates.today_api()`, never cached at
+   `on_init`. A cached window would survive KST midnight and leave yesterday's count on the
+   tile until the app restarted — wrong for a whole day, and it would look fine.
+2. **This app's own actions update the tile immediately**, at **zero extra requests**: a
+   register from a Flow card or a tile press refreshes it, and every settings-page history
+   fetch feeds its rows straight in (`note_history`), which covers the settings page's
+   register *and* cancel — the page re-reads the table after both. The poll is therefore only
+   there to catch registrations made elsewhere and the midnight rollover.
+3. **Every value re-filters to its own dates client-side.** The read asks for a forward
+   window (`POLL_DAYS_AHEAD`) because 다음 방문 예정 cannot be answered from a single day, and
+   nothing about a bare number on a tile could reveal that it had quietly covered three
+   months instead.
+
+**현재 주차 중 is a sensor and deliberately not a Flow trigger.** An arrival trigger was built
+and then removed: iParking offers no webhook and no push, so the only way to notice a car
+entering is to see `RESERVE` become `IN` on a poll — meaning **up to an hour late**, and a
+visit that starts and ends inside one interval is never seen at all. Making it useful would
+mean polling hard enough to risk the vendor blocking this client, which is a bad trade for a
+notification. The sensor states what is true at the last read; a Flow card would have implied
+a promptness the data cannot support. Do not add the trigger back without a push channel.
 
 **Poll cadence** is 3600 s ± 10 % with a 0–10 % start offset and **one request per tick** —
 24 requests/day/device. See `const.POLL_INTERVAL_S`; there is still no `poll_interval` setting.
-Two consecutive failures mark the device unavailable, because the capability keeps the last count
-it read: without the transition, a lot that stopped answering looks exactly like a lot with no
-visitors today.
+Two consecutive failures mark the device unavailable, because the capabilities keep the last
+values they read: without the transition, a lot that stopped answering looks exactly like a lot
+with no visitors today.
 
 **The register path (item 7).** `flow_register` is the whole run listener body, shared by both
 register cards — `register_visitor` (plate + optional date) and `register_visitor_today` (plate
@@ -71,7 +91,8 @@ KST**. Three mechanics carry the whole feature, and each is a constraint rather 
    wrote `false` back after every press to "un-latch" it; that was inverted reasoning and the
    maintainer's hub showed it — the readable value *was* the latch, the tile sat lit like a
    switch that had been flipped on, and the reset existed only to undo a problem it had itself
-   created. **Nothing in this module writes a capability value at all any more.**
+   created. **The only capability values this module writes are the five sensors**, all in
+   `_apply_values`, and a test pins that they live nowhere else.
 
 **A pair counts only when both halves are present and the plate validates.** Half a pair or a
 typo'd plate produces no button *and a log line saying which slot and why* — silence there
@@ -102,11 +123,17 @@ from homey import device
 
 from iparking_lib import compat, i18n
 from iparking_lib.const import (
+    CAPABILITY_NEXT_VISIT,
     CAPABILITY_PARK_NAME,
+    CAPABILITY_PARKED_NOW,
     CAPABILITY_TODAY_COUNT,
+    CAPABILITY_TOMORROW_COUNT,
+    CAPABILITY_WEEK_COUNT,
+    COUNT_CAPABILITIES,
     MAX_FAVORITES,
     MAX_POLL_FAILURES,
     POLL_BACKOFF_S,
+    POLL_DAYS_AHEAD,
     POLL_INTERVAL_S,
     POLL_JITTER,
     POLL_START_JITTER,
@@ -115,6 +142,7 @@ from iparking_lib.const import (
     STORE_LOT_ID,
     STORE_PARK_SEQ,
     STORE_STOR_SEQ,
+    WEEK_DAYS,
     favorite_name_setting,
     favorite_plate_setting,
     quick_capability,
@@ -123,7 +151,9 @@ from iparking_lib.iparking import codes, dates
 from iparking_lib.iparking.client import (
     IparkingError,
     RegisterUncertain,
-    count_registered_on,
+    count_registered_between,
+    next_visit,
+    parked_on,
 )
 from iparking_lib.iparking.plate import (
     InvalidPlateError,
@@ -135,6 +165,11 @@ from iparking_lib.iparking.plate import (
 #: Shown while today's count cannot be read. Deliberately not "logged out" — the account may be
 #: fine and the vendor's API simply unreachable, and the tile has no room to explain both.
 _UNAVAILABLE = "오늘 등록 현황을 가져올 수 없습니다"
+
+#: 다음 방문 예정 with nothing booked. An em dash rather than "없음" or an empty string: empty
+#: reads as "not loaded yet" on a tile, and the dash is language-neutral, so this one value
+#: needs no translation lookup on a path that runs on every poll.
+NO_UPCOMING_VISIT = "—"
 
 #: One usable favourite: its 1-based slot, the label its button carries, and the **normalized**
 #: plate. Never constructed for half a pair or an invalid plate — see `read_favorites`.
@@ -270,9 +305,9 @@ class VisitCarDevice_(device.Device):
         except Exception as exc:
             self.log(f"iparking: the 주차장명 sensor could not be removed: {exc}")
         try:
-            await self._adopt_today_count()
+            await self._adopt_capabilities()
         except Exception as exc:
-            self.log(f"iparking: the 오늘 등록 sensor could not be added: {exc}")
+            self.log(f"iparking: the tile sensors could not be added: {exc}")
         # Reconciled at init as well as on every save, so a hub restart does not lose the
         # buttons — a paired device is re-created from scratch and `add_capability` is the only
         # thing that puts them back.
@@ -335,8 +370,8 @@ class VisitCarDevice_(device.Device):
         # two: a capability that goes away takes its listener registration with it.
         self._listening.discard(CAPABILITY_PARK_NAME)
 
-    async def _adopt_today_count(self) -> None:
-        """Add the 오늘 등록 sensor to a device paired by an earlier version.
+    async def _adopt_capabilities(self) -> None:
+        """Add every history-derived sensor to a device paired by an earlier version.
 
         The mirror of `_shed_park_name`, and it is needed for the same reason that one is:
         **`driver.compose.json`'s capability list only applies to a device at the moment it is
@@ -348,13 +383,20 @@ class VisitCarDevice_(device.Device):
         `capabilities: ['iparking_quick_1', 'iparking_quick_2']` and no count at all.
 
         A no-op on a freshly paired device, and idempotent, so a second `on_init` costs nothing.
+
+        **Each capability is added independently.** One that the runtime refuses must not cost
+        the user the other four; the tile that comes back with four sensors is strictly better
+        than the one that gives up at the first failure and shows none.
         """
-        if CAPABILITY_TODAY_COUNT in self.get_capabilities():
-            return
-        self.log("iparking: adding the 오늘 등록 sensor to a device paired before it existed")
-        await self._sdk_call(
-            ("add_capability", "addCapability"), CAPABILITY_TODAY_COUNT
-        )
+        present = set(self.get_capabilities())
+        for capability in COUNT_CAPABILITIES:
+            if capability in present:
+                continue
+            self.log(f"iparking: adding {capability} to a device paired before it existed")
+            try:
+                await self._sdk_call(("add_capability", "addCapability"), capability)
+            except Exception as exc:
+                self.log(f"iparking: {capability} could not be added: {exc}")
 
     # --- 오늘 등록: the sensor and its poll -----------------------------------
 
@@ -433,7 +475,7 @@ class VisitCarDevice_(device.Device):
                 self.log(f"iparking: poll failed: {exc}")
 
     async def _poll_once(self) -> None:
-        """**One** request: today's 등록 내역 for this lot, counted.
+        """**One** request: this lot's 등록 내역 from today forward, turned into every value.
 
         **The window is recomputed here, on every tick, and never cached anywhere.** That is the
         midnight rollover: at 00:00 KST the answer becomes "today's registrations", for the new
@@ -441,9 +483,16 @@ class VisitCarDevice_(device.Device):
         the app happened to restart — wrong for a whole day, and indistinguishable on the tile
         from a correct answer.
 
-        A one-day window also keeps the response small; the date is asserted again inside
-        `count_registered_on`, because the vendor's own filtering rules were never characterised
-        and a bare number on a tile cannot reveal that it silently covered three months.
+        The window used to be a single day, which was right when today's count was the only
+        thing on the tile. 다음 방문 예정 cannot be answered from one day — the honest answer may
+        be three weeks out — so it now reaches `POLL_DAYS_AHEAD` forward. **Still one request**:
+        `page_size` covers it and `client.history` pages if the vendor says otherwise. Nothing
+        about the traffic budget changes; the response is bigger, not more frequent.
+
+        Every value re-filters to its own dates client-side (`count_registered_between`,
+        `parked_on`, `next_visit`), because the vendor's own filtering rules were never
+        characterised and a bare number on a tile cannot reveal that it silently covered a
+        wider span than it claimed.
         """
         today = dates.today_api()
         try:
@@ -451,7 +500,7 @@ class VisitCarDevice_(device.Device):
                 park_seq=self._park_seq,
                 stor_seq=self._stor_seq,
                 start_date=today,
-                end_date=today,
+                end_date=dates.shift_api(today, POLL_DAYS_AHEAD),
             )
         except Exception:
             self._failures += 1
@@ -459,7 +508,7 @@ class VisitCarDevice_(device.Device):
             raise
         # Reset on an explicit success, never inferred from the absence of an exception.
         self._failures = 0
-        await self._apply_count(count_registered_on(rows, today), today)
+        await self._apply_values(rows, today)
         await self._update_availability()
 
     async def note_history(self, park_seq: int, stor_seq: int, rows) -> None:
@@ -480,12 +529,11 @@ class VisitCarDevice_(device.Device):
         if int(park_seq) != self._park_seq or int(stor_seq) != self._stor_seq:
             return
         try:
-            today = dates.today_api()
-            await self._apply_count(count_registered_on(rows, today), today)
+            await self._apply_values(rows, dates.today_api())
         except Exception as exc:
-            self.log(f"iparking: 오늘 등록 count could not be updated from a history read: {exc}")
+            self.log(f"iparking: the tile could not be updated from a history read: {exc}")
 
-    async def refresh_today_count(self) -> None:
+    async def refresh_counts(self) -> None:
         """Re-read today's count, now. One request, and never fatal.
 
         Called after this app's own register so the tile is right the moment the user acts, rather
@@ -504,12 +552,52 @@ class VisitCarDevice_(device.Device):
         except Exception as exc:
             self.log(f"iparking: 오늘 등록 count refresh failed: {exc}")
 
-    async def _apply_count(self, count: int, today: str) -> None:
-        value = int(count)
-        if value != self._today_count:
-            self.log(f"iparking: 오늘({today}) 등록된 차량 {value}대")
-            self._today_count = value
-        await self._set(CAPABILITY_TODAY_COUNT, value)
+    async def _apply_values(self, rows, today: str) -> None:
+        """Every tile value from one already-fetched list of rows. **Costs no request.**
+
+        Called from the poll and from `note_history`, which is what lets a settings-page read
+        update the tile for free. Both hand over whatever window they happened to fetch; the
+        per-value filters below are what make that safe, so neither caller has to know what
+        the other asked for.
+        """
+        tomorrow = dates.shift_api(today, 1)
+        parked = parked_on(rows, today)
+        upcoming = next_visit(rows, today)
+
+        count = count_registered_between(rows, today, today)
+        if count != self._today_count:
+            self.log(f"iparking: 오늘({today}) 등록된 차량 {count}대")
+            self._today_count = count
+
+        await self._set(CAPABILITY_TODAY_COUNT, count)
+        await self._set(CAPABILITY_TOMORROW_COUNT,
+                        count_registered_between(rows, tomorrow, tomorrow))
+        await self._set(CAPABILITY_WEEK_COUNT,
+                        count_registered_between(rows, today,
+                                                 dates.shift_api(today, WEEK_DAYS - 1)))
+        await self._set(CAPABILITY_PARKED_NOW, len(parked))
+        await self._set(CAPABILITY_NEXT_VISIT, await self._describe_next(upcoming))
+
+    async def _describe_next(self, row) -> str:
+        """`2026-08-15 (토) · 12가1234`, or `—` when nothing is booked.
+
+        The date goes through `dates.format_kst_human`, the same formatter the register
+        notification uses, so the tile and the message cannot spell the same day differently.
+
+        The plate is **not** masked here, unlike every log line. This is the user reading
+        their own tile — `12가****` would make the value useless — and the tile is only ever
+        shown to the person whose registrations these are.
+        """
+        if row is None:
+            return NO_UPCOMING_VISIT
+        language = await compat.ui_language(self.homey)
+        try:
+            when = dates.format_kst_human(str(row.invitation_date), language)
+        except Exception:
+            # A malformed date from the vendor must not blank the whole tile; the raw value is
+            # still more useful than an em dash.
+            when = str(row.invitation_date)
+        return f"{when} · {row.car_number}" if row.car_number else when
 
     async def _update_availability(self, reason: str = _UNAVAILABLE) -> None:
         """`set_unavailable` after **two** consecutive failures, `set_available` on recovery.
@@ -639,7 +727,7 @@ class VisitCarDevice_(device.Device):
         # after the notification: a refresh that fails must not turn a registration that
         # succeeded into an error.
         if str(result.api_date) == dates.today_api():
-            await self.refresh_today_count()
+            await self.refresh_counts()
         return True
 
     # --- 자주 오는 차량: the tile buttons -------------------------------------

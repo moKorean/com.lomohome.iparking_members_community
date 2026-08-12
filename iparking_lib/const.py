@@ -309,6 +309,47 @@ CAPABILITY_PARK_NAME = "iparking_park_name"
 #: and it is deliberately the *same set object* rather than a second spelling of it.
 CAPABILITY_TODAY_COUNT = "iparking_today_count"
 
+#: **내일 방문 예정** — the same count, one day on. `dates.shift_api(today, 1)`.
+CAPABILITY_TOMORROW_COUNT = "iparking_tomorrow_count"
+
+#: **이번 주 방문 예정** — a rolling `WEEK_DAYS` window starting today, inclusive. Rolling
+#: rather than calendar-week on purpose: on a Sunday a calendar week reads 0 with three
+#: visitors booked for Monday, which is the opposite of what a glance at a tile is for.
+CAPABILITY_WEEK_COUNT = "iparking_week_count"
+
+#: **현재 주차 중** — today's rows whose status is `IN`, i.e. vehicles the barrier has actually
+#: let in and not yet let out. The vendor computes this transition, so it is reported rather
+#: than inferred. See `client.parked_on` for why `OUT` is excluded despite being "active".
+CAPABILITY_PARKED_NOW = "iparking_parked_now"
+
+#: **다음 방문 예정** — the soonest upcoming visit as a short human string (`8/15 (토) ·
+#: 12가1234`), or a dash when there is none. A string capability rather than a date: Homey
+#: has no date sensor, and the useful glance is "who, and when", not an ISO value.
+CAPABILITY_NEXT_VISIT = "iparking_next_visit"
+
+#: Every capability whose value comes out of one history read. Ordered as they should read on
+#: the tile, and used by `device._adopt_capabilities` so adding a sensor in a future version
+#: reaches devices paired before it existed.
+COUNT_CAPABILITIES = (
+    CAPABILITY_TODAY_COUNT,
+    CAPABILITY_TOMORROW_COUNT,
+    CAPABILITY_WEEK_COUNT,
+    CAPABILITY_PARKED_NOW,
+    CAPABILITY_NEXT_VISIT,
+)
+
+#: The span of 이번 주 방문 예정, counting today as day 1.
+WEEK_DAYS = 7
+
+#: How far ahead the device poll reads. It used to be a one-day window, which was right when
+#: the only value on the tile was today's count. 다음 방문 예정 cannot be answered from one day
+#: — the honest answer to "when is the next visit" may be three weeks out — so the poll now
+#: asks for the same forward window the settings table uses. **Still one request**: `page_size`
+#: covers it, and `client.history` pages if the vendor says there is more. Every value is
+#: filtered to its own dates client-side afterwards, so a wide read cannot inflate a count.
+POLL_DAYS_AHEAD = HISTORY_DAYS_AHEAD
+
+
 # --- 자주 오는 차량: the device's own tile buttons ----------------------------
 #
 # Twenty device settings (10 names + 10 plates) and ten capabilities, and the asymmetry between

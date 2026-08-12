@@ -5,7 +5,11 @@
   },
   "class": "sensor",
   "capabilities": [
-    "iparking_today_count"
+    "iparking_today_count",
+    "iparking_tomorrow_count",
+    "iparking_week_count",
+    "iparking_parked_now",
+    "iparking_next_visit"
   ],
   "settings": [
     {

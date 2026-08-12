@@ -34,5 +34,9 @@
   "0.1.8": {
     "ko": "등록 내역이 앞으로의 방문도 보여줍니다. 지금까지는 오늘까지만 조회해서, 내일 이후로 등록해 둔 차량이 표에 아예 나오지 않았습니다. 이제 지난 3개월과 앞으로 3개월을 함께 불러오고, 앞으로 방문할 차량이 맨 위에 옵니다.",
     "en": "The registration history now shows upcoming visits. It previously stopped at today, so a vehicle registered for tomorrow or later never appeared in the table at all. It now covers three months back and three months ahead, with upcoming visits listed first."
+  },
+  "0.1.9": {
+    "ko": "기기 화면에 센서가 넷 늘었습니다 — 내일 방문 예정, 이번 주 방문 예정(오늘부터 7일), 현재 주차 중, 다음 방문 예정. 다섯 개 모두 기존과 같은 조회 한 건에서 나오므로 요청 수는 그대로입니다. \"현재 주차 중\"은 지금 단지에 들어와 있는 방문 차량이며, 1시간마다 조회하므로 최대 1시간 늦게 반영되고 그 사이에 들어왔다 나간 방문은 표시되지 않습니다.",
+    "en": "Four more sensors on the device tile: expected tomorrow, expected this week (the next seven days from today), parked now, and next visit. All five come from the same single read, so the number of requests is unchanged. \"Parked now\" counts visitor vehicles currently inside the complex; it is read hourly, so it can be up to an hour behind and will miss a visit that starts and ends between two reads."
   }
 }

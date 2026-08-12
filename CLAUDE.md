@@ -80,26 +80,41 @@ The Python package is `iparking_lib` (**not** `lib`).
   `favorites` group; the driver's static `capabilities` list holds exactly
   `iparking_today_count`, because a freshly paired device must start with **zero** buttons.
 
-## The device's one sensor, and the poll
+## The device's five sensors, one request, and the poll
 
-`iparking_today_count` — 오늘 등록된 차량 수 — is polled at 3600 s ± 10 % (0–10 % start offset,
-**one request per tick**, 24/day/device; `const.POLL_INTERVAL_S`). Two consecutive failures mark
-the device unavailable (`MAX_POLL_FAILURES`), because the capability keeps the last count it read
-and would otherwise look exactly like a lot with no visitors today.
+`iparking_today_count` (오늘 방문 예정), `iparking_tomorrow_count`, `iparking_week_count`
+(rolling `WEEK_DAYS` from today), `iparking_parked_now` (현재 주차 중, `IN` only) and
+`iparking_next_visit` (a short string, `—` when nothing is booked) are **all derived from one
+등록 내역 read** in `device._apply_values`. Adding the last four cost no extra traffic — only a
+wider window. Polled at 3600 s ± 10 % (0–10 % start offset, **one request per tick**,
+24/day/device; `const.POLL_INTERVAL_S`). Two consecutive failures mark the device unavailable
+(`MAX_POLL_FAILURES`), because the capabilities keep the last values they read and would
+otherwise look exactly like a lot with no visitors today.
 
-Three rules, and each is a defect avoided rather than a preference:
+Four rules, and each is a defect avoided rather than a preference:
 
 - **`CANCEL` rows are not counted.** 취소 flips `inot_status` and leaves the row in the list, so a
   day's rows are frequently mostly cancellations — counting them read 6 on the maintainer's own
-  account where the honest answer was 1. One rule, one home: `client.count_registered_on`, over
-  `const.ACTIVE_STATUSES`.
-- **The date window is recomputed every tick** from `dates.today_api()`, never cached. A cached
-  window survives KST midnight and holds yesterday's count all day, looking perfectly fine.
+  account where the honest answer was 1. One rule, one home: `client.count_registered_between`,
+  over `const.ACTIVE_STATUSES`.
+- **현재 주차 중 excludes `OUT` even though `OUT` is an active status.** A departed car is still a
+  valid uncancelled registration — that is what `ACTIVE_STATUSES` means — and is exactly what
+  must not be counted as present.
+- **The window is recomputed every tick** from `dates.today_api()`, never cached. A cached window
+  survives KST midnight and holds yesterday's count all day, looking perfectly fine.
 - **This app's own actions update it at zero extra requests.** `api.get_history` feeds its rows to
   the matching device (`device.note_history`), which covers the settings page's register *and*
-  cancel because `form.js` re-reads the table after both; a Flow/tile register for today calls
-  `refresh_today_count`. The poll is then only there to catch registrations made on the vendor's
+  cancel because `form.js` re-reads the table after both; a Flow/tile register calls
+  `refresh_counts`. The poll is then only there to catch registrations made on the vendor's
   website and the midnight rollover.
+
+**No arrival trigger, and that was a decision.** `iparking_parked_now` is a sensor only. A
+`visitor_arrived` device trigger was implemented, tested and then deleted: iParking has no
+webhook and no push, so an arrival is only visible as `RESERVE → IN` on a poll — up to an hour
+late, and invisible entirely for a visit shorter than one interval. Making it prompt means
+polling hard enough to risk the vendor blocking this client. A Flow card would have advertised
+a promptness the data cannot support. **Do not reintroduce it without a push channel** — the
+sensor plus the documented delay is the honest version.
 
 **What not to "restore":** the poll used to refresh 주차장명, a constant that was also the device's
 own name. Polling a constant was waste; polling a count is what makes it true. That distinction is
@@ -151,8 +166,9 @@ Every example plate is `12가1234`, or `123가1234` where a three-digit prefix i
 Tests that must tell two vehicles apart vary **only the trailing digits** — `12가1235`,
 `12가1236`, … — so the family reads as generated rather than observed.
 
-The reason is not tidiness: **any string shaped `NN가NNNN` may be a real car.** Nothing marks
-`34나5678` as invented, and this repo is public. `tests/test_sample_plates.py` scans the
+The reason is not tidiness: **any string shaped `NN가NNNN` may be a real car.** An
+invented-looking plate outside the family carries no mark that it is invented, and this repo
+is public. `tests/test_sample_plates.py` scans the
 working tree (tracked + untracked-not-ignored) and fails with file and line on anything
 outside the family; it exempts `NNN동NNNN호`, which is a 세대 address, and the deliberately
 invalid fixtures (`1234가1234`, `12가45678`) via lookarounds.

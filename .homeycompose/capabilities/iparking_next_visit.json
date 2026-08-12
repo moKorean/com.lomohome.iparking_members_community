@@ -1,0 +1,13 @@
+{
+  "$comment": "다음 방문 예정 — the soonest still-upcoming registration as a short human string (`8/15 (토) · 12가1234`), or `—` when there is none. A string rather than a date because Homey has no date sensor and the useful glance is who and when, not an ISO value. TODAY COUNTS AS UPCOMING: a visit booked for this afternoon has not happened yet, and skipping to tomorrow at midnight would answer a question nobody asked. `insights: false` — graphing a label produces nothing, which is the same call iparking_park_name got before it was deleted.",
+  "type": "string",
+  "title": {
+    "ko": "다음 방문 예정",
+    "en": "Next visit"
+  },
+  "getable": true,
+  "setable": false,
+  "insights": false,
+  "uiComponent": "sensor",
+  "icon": "/assets/capabilities/visitcar.svg"
+}

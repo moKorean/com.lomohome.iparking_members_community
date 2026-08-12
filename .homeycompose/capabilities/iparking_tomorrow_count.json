@@ -1,0 +1,19 @@
+{
+  "$comment": "내일 방문 예정 — tomorrow's registration count in KST, from the SAME history read that feeds iparking_today_count, so it costs no extra request. Same two filters as today's count: CANCEL rows are excluded (취소 flips inot_status rather than deleting the row), and the date is re-checked client-side because the vendor's own filtering was never characterised. `insights: true` for the same reason today's count has it — a count per day is a real measurement, unlike the constant string this tile used to carry.",
+  "type": "number",
+  "title": {
+    "ko": "내일 방문 예정",
+    "en": "Expected tomorrow"
+  },
+  "units": {
+    "ko": "대",
+    "en": "cars"
+  },
+  "decimals": 0,
+  "min": 0,
+  "getable": true,
+  "setable": false,
+  "insights": true,
+  "uiComponent": "sensor",
+  "icon": "/assets/capabilities/visitcar.svg"
+}

@@ -61,7 +61,6 @@ import json
 import time
 import urllib.parse
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 
 from iparking_lib.const import (
     ACTIVE_STATUSES,
@@ -84,6 +83,7 @@ from iparking_lib.const import (
     REGISTER_TIMEOUT_S,
     REQUIRED_SCHEMES,
     SCHEMES,
+    STATUS_IN,
     WRITE_WINDOW_S,
 )
 from iparking_lib.iparking import codes, crypto, dates
@@ -270,8 +270,63 @@ def count_registered_on(rows, api_date: str) -> int:
     home. It is the only counting logic in the app — `aggregate_counts` below is the vendor's own
     aggregate, which is empty in practice and is not it.
     """
+    return count_registered_between(rows, api_date, api_date)
+
+
+def count_registered_between(rows, start_api_date: str, end_api_date: str) -> int:
+    """`count_registered_on` over an inclusive window — 내일, 이번 주, any span.
+
+    String comparison, not date arithmetic: `yyyyMMdd` sorts lexicographically in calendar
+    order, which is the whole reason the wire format is worth keeping as the internal one. A
+    row the vendor sent malformed compares false and is skipped rather than raising, exactly
+    as it does in the single-day case.
+    """
+    start, end = str(start_api_date), str(end_api_date)
+    return sum(
+        1 for row in rows if row.is_active and start <= str(row.invitation_date) <= end
+    )
+
+
+def parked_on(rows, api_date: str) -> list:
+    """Rows for `api_date` whose status is `IN` — vehicles **actually inside** the complex.
+
+    A different question from the registration count, and the reason it earns its own tile
+    value: 오늘 방문 예정 says how many are *expected*, this says how many are *here*. The
+    vendor moves a row `RESERVE → IN → OUT` as the barrier reads the plate, so `IN` is the
+    vendor's own answer to "is this car parked right now", not an inference of ours.
+
+    `OUT` is excluded even though it is an `ACTIVE_STATUSES` member: a car that has left is
+    still a valid, uncancelled registration — which is what `ACTIVE_STATUSES` means — and is
+    exactly what must not be counted as present.
+    """
     wanted = str(api_date)
-    return sum(1 for row in rows if row.is_active and str(row.invitation_date) == wanted)
+    return [
+        row
+        for row in rows
+        if str(row.invitation_date) == wanted and row.status == STATUS_IN
+    ]
+
+
+def next_visit(rows, today_api_date: str):
+    """The soonest still-upcoming registration, or `None`.
+
+    "Upcoming" includes **today**: a visit registered for this afternoon has not happened
+    yet, and a tile that skipped to tomorrow the moment midnight passed would be answering a
+    question nobody asked.
+
+    Ties are broken by `invt_seq` so the answer is stable across polls — two vehicles booked
+    for the same day would otherwise swap places on the tile depending on the order the
+    vendor happened to return them in.
+    """
+    today = str(today_api_date)
+    upcoming = [
+        row
+        for row in rows
+        if row.is_active and str(row.invitation_date) >= today
+    ]
+    if not upcoming:
+        return None
+    return min(upcoming, key=lambda row: (str(row.invitation_date), row.invt_seq))
 
 
 # --- the client -------------------------------------------------------------
@@ -669,11 +724,11 @@ class IparkingApi:
         """
         today = dates.today_api()
         payload = {
-            "startDate": start_date or self._shift_days(today, -HISTORY_DAYS_BACK),
+            "startDate": start_date or dates.shift_api(today, -HISTORY_DAYS_BACK),
             # Forward as well as back. An `endDate` of today reads as "the whole history" but
             # silently excludes every visit that has not happened yet — which is most of what
             # the 등록 내역 table exists to show.
-            "endDate": end_date or self._shift_days(today, HISTORY_DAYS_AHEAD),
+            "endDate": end_date or dates.shift_api(today, HISTORY_DAYS_AHEAD),
             "carNumber": car_number,
             "storSeq": int(stor_seq),
             "parkSeq": int(park_seq),
@@ -1141,8 +1196,3 @@ class IparkingApi:
 
     # --- helpers ------------------------------------------------------------
 
-    @staticmethod
-    def _shift_days(api_date: str, days: int) -> str:
-        """`api_date` moved by `days` (negative = earlier), still `yyyyMMdd`."""
-        parsed = datetime.strptime(api_date, dates.API_DATE_FORMAT)
-        return (parsed + timedelta(days=days)).strftime(dates.API_DATE_FORMAT)

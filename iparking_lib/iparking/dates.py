@@ -140,6 +140,17 @@ def today_api() -> str:
     return now_kst().strftime(API_DATE_FORMAT)
 
 
+def shift_api(api_date: str, days: int) -> str:
+    """`api_date` moved by `days` (negative = earlier), still `yyyyMMdd`.
+
+    Here rather than on the client because the device needs it too — today+1 for 내일 방문
+    예정 and today+7 for 이번 주 — and a second copy is a second thing to get wrong at a
+    month boundary.
+    """
+    parsed = datetime.strptime(str(api_date), API_DATE_FORMAT)
+    return (parsed + timedelta(days=days)).strftime(API_DATE_FORMAT)
+
+
 def to_api_date(value: str | None) -> ApiDate:
     """`yyyy-mm-dd`, `dd-mm-yyyy` or `mm-dd-yyyy` → `ApiDate` (`yyyyMMdd`).
 
