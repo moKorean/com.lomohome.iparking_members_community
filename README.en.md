@@ -3,8 +3,9 @@
 **An app for someone living in a building that uses iParking, to register parking for
 visitors coming to their own home.** It brings the **방문 차량 관리** (visitor vehicle
 management) feature of the iParking MEMBERS website into Homey: sign in, enter a plate number
-and a visit date to register a visitor, see how many vehicles are expected to visit today, and
-view or cancel past registrations.
+and a visit date to register a visitor, see at a glance how many vehicles are expected today,
+tomorrow and this week, how many are parked inside right now and when the next visit is due,
+and view or cancel registrations.
 
 This is an **unofficial, community-built app and is not affiliated with iParking**. It was
 built by reverse-engineering the site's undocumented web bundles — see
@@ -108,7 +109,7 @@ The Homey app itself is © 2026 Geunwon Mo.
   takes only a plate and always registers for today in KST. Both cards go through the same
   register path and differ only in where the date comes from.
   <br>The date-picking card **echoes the date it actually used back in the success
-  notification** (`12가1234 · 2026-08-05 (Wed) 방문 등록`). Whether Homey hands a `date`
+  notification** (`12가1234 · registered for 2026-08-05 (Wed)`). Whether Homey hands a `date`
   argument over as `dd-mm-yyyy` or `mm-dd-yyyy` is not pinned anywhere, and the two are
   **shape-identical**, so a misread would register the wrong day *silently*. Where the values
   decide it (`25-12-2026`, whose first field exceeds 12) the app resolves it correctly on its
@@ -160,7 +161,8 @@ Verified against: a Homey Pro (firmware 13.x), Python runtime 3.14, one iParking
 
 ## Setup
 
-1. Install from the Homey App Store, or from source with `homey app install`.
+1. Install from the Homey App Store if it is listed there, or from source with
+   `homey app install`.
 2. Open the **app settings** and sign in with your iParking MEMBERS account.
 3. Add a device → **iParking Visitor Parking** → pick the lot tied to your account.
 4. From the app settings page, enter a plate number and visit date to register, and
@@ -204,7 +206,7 @@ primitive, pinned correct against externally generated test vectors.
 homey app build                       # compose .homeycompose/* into app.json
 homey app install                     # build and install to the connected Homey
 homey app run                         # dev mode with live logs (pairing/login diagnosis)
-homey app validate --level publish    # hygiene gate run after every change, not a submission
+homey app validate --level publish    # run after every change; also the submission gate
 uv run pytest -q                      # unit tests for the pure client logic
 ```
 

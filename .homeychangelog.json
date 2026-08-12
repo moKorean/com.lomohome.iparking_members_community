@@ -50,5 +50,9 @@
   "0.2.2": {
     "ko": "기기 화면의 아이콘이 전부 까맣게 칠해져 보이던 문제를 고쳤습니다. 센서와 버튼마다 알맞은 아이콘이 붙습니다 — 오늘·내일·이번 주는 달력, 현재 주차 중은 차, 다음 방문 예정은 시계가 달린 차, 자주 오는 차량 버튼은 차단기입니다.",
     "en": "Fixed every icon on the device tile rendering as a solid black shape. Each sensor and button now has an icon that fits: calendars for today, tomorrow and this week, a car for parked now, a car with a clock for the next visit, and a boom gate for the frequent-vehicle buttons."
+  },
+  "0.3.0": {
+    "ko": "첫 공개 릴리스입니다. 아이파킹 MEMBERS 계정으로 로그인해 집에 오는 방문 차량의 주차를 등록하세요. 기기 화면에서 오늘·내일·이번 주 방문 예정 대수와 지금 들어와 있는 차량 수, 다음 방문 예정일을 한눈에 봅니다. 설정 화면이나 플로우 액션으로 등록하고, 자주 오는 차량은 버튼 하나로 등록하고, 지난 3개월과 앞으로 3개월의 등록 내역을 보고 취소할 수 있습니다. 아이파킹이 만든 공식 앱이 아니며, 등록하면 단지의 실제 출입통제 시스템에 즉시 반영됩니다 — 설치 전에 안내를 읽어 주세요.",
+    "en": "First public release. Sign in with your iParking MEMBERS account and register parking for visitors coming to your home. The device shows how many vehicles are expected today, tomorrow and this week, how many are parked inside right now, and when the next visit is due. Register from the settings page or a Flow action, give frequent visitors a one-press button, and review or cancel three months of registrations either side of today. This is not an official iParking app, and a registration takes effect on your building's real access-control system immediately — please read the notes before installing."
   }
 }
