@@ -97,8 +97,8 @@ The Python package is `iparking_lib` (**not** `lib`).
 (rolling `WEEK_DAYS` from today), `iparking_parked_now` (현재 주차 중, `IN` only) and
 `iparking_next_visit` (a short string, `—` when nothing is booked) are **all derived from one
 등록 내역 read** in `device._apply_values`. Adding the last four cost no extra traffic — only a
-wider window. Polled at 3600 s ± 10 % (0–10 % start offset, **one request per tick**,
-24/day/device; `const.POLL_INTERVAL_S`). Two consecutive failures mark the device unavailable
+wider window. Polled at 600 s ± 10 % (0–10 % start offset, **one request per tick**,
+144/day/device since v0.3.1, up from hourly; `const.POLL_INTERVAL_S` carries the trade). Two consecutive failures mark the device unavailable
 (`MAX_POLL_FAILURES`), because the capabilities keep the last values they read and would
 otherwise look exactly like a lot with no visitors today.
 
@@ -121,9 +121,10 @@ Four rules, and each is a defect avoided rather than a preference:
 
 **No arrival trigger, and that was a decision.** `iparking_parked_now` is a sensor only. A
 `visitor_arrived` device trigger was implemented, tested and then deleted: iParking has no
-webhook and no push, so an arrival is only visible as `RESERVE → IN` on a poll — up to an hour
-late, and invisible entirely for a visit shorter than one interval. Making it prompt means
-polling hard enough to risk the vendor blocking this client. A Flow card would have advertised
+webhook and no push, so an arrival is only visible as `RESERVE → IN` on a poll — up to ten
+minutes late since v0.3.1, and invisible entirely for a visit shorter than one interval.
+Making it *prompt* means polling harder still, and the ceiling to weigh that against is the
+vendor's willingness to keep serving this client, not the hub's capacity. A Flow card would have advertised
 a promptness the data cannot support. **Do not reintroduce it without a push channel** — the
 sensor plus the documented delay is the honest version.
 

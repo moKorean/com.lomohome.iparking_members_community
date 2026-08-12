@@ -204,7 +204,7 @@ def devices(homey, driver_id: str) -> list:
     Used for exactly one thing: letting a settings-page history fetch update the 오늘 등록 count
     on the matching device tile, at **no extra request** (see `device.note_history`). That makes
     it a courtesy, so every step is optional and nothing raises — a runtime that exposes no
-    driver registry costs the user a tile that is up to an hour stale, and nothing else. Returning
+    driver registry costs the user a tile that is up to one poll stale, and nothing else. Returning
     `[]` and letting the caller do nothing is the correct failure here.
 
     Both spellings of both accessors, on the same reasoning as `flow_card`. `get_driver` /

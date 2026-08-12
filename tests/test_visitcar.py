@@ -790,7 +790,8 @@ def test_a_poll_asks_from_today_forward(make_device):
 
 
 def test_a_poll_is_one_request_per_tick(make_device):
-    """24 requests/day/device. Politeness enforced by arithmetic rather than asserted."""
+    """One request per tick — 144/day/device at the v0.3.1 cadence. Politeness enforced by
+    arithmetic rather than asserted, and the figure the vendor-blocking risk is priced against."""
     api = _StubApi(history_rows=[_hist(1)])
     dev, _homey = make_device(api=api)
     before = len(api.history_calls)
@@ -1060,7 +1061,7 @@ def test_a_three_month_history_read_still_only_counts_today(make_device):
 
 
 def test_a_register_for_today_refreshes_the_count_immediately(make_device):
-    """The tile should be right the moment the user acts, not up to an hour later. A re-read
+    """The tile should be right the moment the user acts, not a poll later. A re-read
     rather than an increment: incrementing would put a number on the tile that no server ever
     confirmed, and reporting what the vendor says is registered is this capability's whole job."""
     rows = [_hist(1)]
@@ -1387,15 +1388,15 @@ def _card(card_id: str) -> dict:
     )
 
 
-def test_the_driver_declares_exactly_the_today_count_sensor():
-    """**One, and it is 오늘 등록.** Every paired device has it from pairing, which is also what
-    keeps a freshly paired lot from being capability-less: the ten `iparking_quick_*` schemas are
-    declared app-wide but must be added per device, because a new lot has no favourites yet and
-    listing any of them here would hand every device a dead button.
+def test_the_driver_declares_exactly_the_five_sensors():
+    """**The five sensors, and nothing else.** Every paired device has them from pairing, which
+    is also what keeps a freshly paired lot from being capability-less: the ten
+    `iparking_quick_*` schemas are declared app-wide but must be added per device, because a new
+    lot has no favourites yet and listing any of them here would hand every device a dead button.
 
-    Still no `poll_interval`: the count is already updated the instant this app's own register,
-    cancel or history read answers, so a knob could only invite the tightening the 3600 s cadence
-    exists to avoid."""
+    Still no `poll_interval`: every value is already updated the instant this app's own register,
+    cancel, history read or list card answers, so a knob could only invite the tightening
+    `POLL_INTERVAL_S` exists to bound."""
     spec = json.loads(
         (ROOT / "drivers/visitcar/driver.compose.json").read_text(encoding="utf-8")
     )

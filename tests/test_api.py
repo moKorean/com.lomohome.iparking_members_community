@@ -633,7 +633,7 @@ def test_a_device_that_objects_does_not_spoil_the_history_response(make_homey):
 
 def test_a_runtime_with_no_driver_registry_still_answers_the_history_read(make_homey):
     """`homey.drivers` is not in the fake unless a test asks for it, which is the branch this
-    covers: `compat.devices` returns `[]` and the user pays a tile that is up to an hour stale,
+    covers: `compat.devices` returns `[]` and the user pays a tile that is up to one poll stale,
     not an error."""
     session = _HistoryApi(rows=[_row(PLATE, "20260805", "RESERVE")])
     homey = make_homey(api=session)

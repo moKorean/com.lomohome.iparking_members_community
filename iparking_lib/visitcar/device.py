@@ -9,10 +9,10 @@ window. The poll budget is unchanged: still one request per tick.
 
 The count replaced 주차장명 in v0.1.4, and that swap is the whole argument for the poll.
 주차장명 was the lot's name: *also* the name Homey shows for the device, so the tile printed
-the same string twice, and constant for the lifetime of a pairing — 24 requests a day to
-re-confirm it was waste. These values change whenever anybody registers a car, including on
-the vendor's own website where this app cannot see it happen. Polling a constant was waste;
-polling a count is what makes it true.
+the same string twice, and constant for the lifetime of a pairing — a day's worth of
+requests to re-confirm it was waste. These values change whenever anybody registers a car,
+including on the vendor's own website where this app cannot see it happen. Polling a constant
+was waste; polling a count is what makes it true.
 
 **`CANCEL` rows are not counted.** 취소 flips `inot_status` and leaves the row in the list, so
 a day's rows are frequently mostly cancellations — counting them showed 6 on the maintainer's
@@ -41,14 +41,15 @@ means — and is exactly what must not be counted as present.
 
 **현재 주차 중 is a sensor and deliberately not a Flow trigger.** An arrival trigger was built
 and then removed: iParking offers no webhook and no push, so the only way to notice a car
-entering is to see `RESERVE` become `IN` on a poll — meaning **up to an hour late**, and a
-visit that starts and ends inside one interval is never seen at all. Making it useful would
+entering is to see `RESERVE` become `IN` on a poll — meaning **up to ten minutes late**, and
+a visit that starts and ends inside one interval is never seen at all. Making it useful would
 mean polling hard enough to risk the vendor blocking this client, which is a bad trade for a
 notification. The sensor states what is true at the last read; a Flow card would have implied
 a promptness the data cannot support. Do not add the trigger back without a push channel.
 
-**Poll cadence** is 3600 s ± 10 % with a 0–10 % start offset and **one request per tick** —
-24 requests/day/device. See `const.POLL_INTERVAL_S`; there is still no `poll_interval` setting.
+**Poll cadence** is 600 s ± 10 % with a 0–10 % start offset and **one request per tick** —
+144 requests/day/device, raised from hourly in v0.3.1. See `const.POLL_INTERVAL_S` for the
+trade; there is still no `poll_interval` setting.
 Two consecutive failures mark the device unavailable, because the capabilities keep the last
 values they read: without the transition, a lot that stopped answering looks exactly like a lot
 with no visitors today.
@@ -539,7 +540,7 @@ class VisitCarDevice_(device.Device):
         """Re-read today's count, now. One request, and never fatal.
 
         Called after this app's own register so the tile is right the moment the user acts, rather
-        than up to an hour later. The alternative — incrementing the number we already had —
+        than up to a poll later. The alternative — incrementing the number we already had —
         was rejected: it would put a value on the tile that no server ever confirmed, and this
         capability's whole job is to report what the vendor says is registered.
         """
@@ -805,7 +806,7 @@ class VisitCarDevice_(device.Device):
         self.log(
             f"iparking: {source} register {mask_plate(plate)} -> {outcome} on {result.api_date}"
         )
-        # The tile should be right the moment the user acts, not up to an hour later. **Only when
+        # The tile should be right the moment the user acts, not a poll later. **Only when
         # the registration was for today**, because a Flow card registering next Tuesday changes
         # no count and must not spend a request discovering that. Never fatal, and deliberately
         # after the notification: a refresh that fails must not turn a registration that

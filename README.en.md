@@ -90,7 +90,7 @@ The Homey app itself is © 2026 Geunwon Mo.
   | Next visit | The soonest upcoming day and plate (`8/15 Sat · 12가1234`) |
 
   All five come out of **the same single read** — four extra sensors, and not one extra
-  request. They refresh hourly (± 10 %), update immediately and at **no extra request** when
+  request. They refresh every ten minutes (± 10 %), update immediately and at **no extra request** when
   this app registers, cancels or reads the history, and roll over at midnight KST. The counts
   have Insights enabled.
 
@@ -190,9 +190,9 @@ Not defects in this app but properties of the server it talks to, and you will m
   "it arrived and only the reply was lost", so retrying could register the same vehicle twice.
   Instead the app re-queries to find out what happened, and if that cannot settle it either, it
   tells you the outcome is **uncertain** rather than guessing.
-- **"Parked now" can be up to an hour stale.** iParking offers no webhook and no push, so the
-  only way to notice a car entering is the hourly poll — and a visit that starts and ends
-  between two polls never appears at all. For the same reason there is **no "a visitor
+- **"Parked now" can be up to ten minutes stale.** iParking offers no webhook and no push, so
+  the only way to notice a car entering is the poll — and a visit that starts and ends between
+  two polls never appears at all. For the same reason there is **no "a visitor
   arrived" Flow trigger**: making one prompt would mean polling hard enough to risk the vendor
   blocking this client, which is a bad trade for a notification.
 - **Pressing a button on the device tile shows no toast.** The Homey SDK has no success-toast

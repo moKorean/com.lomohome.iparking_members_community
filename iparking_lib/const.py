@@ -196,24 +196,30 @@ ACTIVE_STATUSES = frozenset({STATUS_RESERVE, STATUS_IN, STATUS_OUT})
 
 # --- Device poll cadence ----------------------------------------------------
 #
-# 24 requests/day/device + ~1 login/week. This is politeness enforced by arithmetic rather
-# than asserted, and it is the number the counterparty risk in the plan is priced against:
-# the vendor can rate-limit or block this client regardless of how it is distributed.
+# 144 requests/day/device + ~1 login/week. This is politeness enforced by arithmetic rather
+# than asserted, and it is the number the counterparty risk is priced against: the vendor can
+# rate-limit or block this client regardless of how it is distributed. **That is the ceiling
+# to argue about before tightening this further**, not the hub's capacity.
 #
 # **What is polled decides whether polling is justified at all**, and this app has now been on
 # both sides of that. v0.1.3 polled to refresh 주차장명 — the lot's name, which is *also* the
-# device's own name, and is fixed for the lifetime of a pairing. 24 requests a day to
-# re-confirm a constant is waste, so both the sensor and the loop were deleted. v0.1.4 polls
-# `CAPABILITY_TODAY_COUNT` instead, which changes whenever anybody registers a car — including
-# on the vendor's own website, where this app cannot see it happen. That is the distinction to
+# device's own name, and is fixed for the lifetime of a pairing. A day's worth of requests to
+# re-confirm a constant is waste, so both the sensor and the loop were deleted. Since v0.1.4
+# the poll answers five values that all change whenever anybody registers a car — including on
+# the vendor's own website, where this app cannot see it happen. That is the distinction to
 # keep: polling a constant was waste, polling a count is what makes it true.
 
-#: One hour. There is still **no `poll_interval` device setting** — deliberately. A knob here
-#: would invite exactly the tightening this cadence exists to avoid, and it would buy very
-#: little: the count is already updated the instant this app's own register, cancel or history
-#: fetch answers, so the poll only has to catch registrations made elsewhere and the KST
-#: midnight rollover.
-POLL_INTERVAL_S = 3600.0
+#: Ten minutes, raised from one hour in v0.3.1 at the maintainer's request. The trade is
+#: explicit: 24 requests/day/device became 144, and the measured ~30 % connection-reset rate
+#: means the real figure is a little higher once reads retry. What it buys is 현재 주차 중 and
+#: the counts being at most ten minutes behind instead of an hour.
+#:
+#: There is still **no `poll_interval` device setting** — deliberately. A knob here would
+#: invite exactly the tightening this cadence exists to bound, and it would buy very little:
+#: every value is already updated the instant this app's own register, cancel, history fetch
+#: or list card answers, so the poll only has to catch registrations made elsewhere and the
+#: KST midnight rollover.
+POLL_INTERVAL_S = 600.0
 
 #: ± fraction applied to every poll sleep, so N paired lots do not tick in lockstep.
 POLL_JITTER = 0.10
