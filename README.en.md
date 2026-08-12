@@ -64,8 +64,12 @@ This app is not a port of anyone else's code — it is a **clean-room client** w
 observations of the site's public web bundles, recorded in
 [`docs/RECON.md`](./docs/RECON.md).
 
-Licensed **MIT** (see `LICENSE`). Because nothing here is ported, there is no `NOTICE`
-file.
+Licensed **MIT** (see `LICENSE`). No **code** here is ported from anywhere.
+
+**The artwork is a different matter.** The device tile's capability icons come from
+[Material Design Icons](https://pictogrammers.com/library/mdi/) by the Pictogrammers group,
+under Apache 2.0. [`NOTICE`](./NOTICE) records which icon is used where and what was changed
+from the originals; the full licence text is at `assets/capabilities/LICENSE-mdi.txt`.
 
 The Homey app itself is © 2026 Geunwon Mo.
 

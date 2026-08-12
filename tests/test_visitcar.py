@@ -1421,16 +1421,57 @@ def test_both_locales_carry_the_flow_notification_keys():
         assert "{plate}" in table["flow_registered"]
 
 
+def _capability_specs():
+    return {
+        path.stem: json.loads(path.read_text(encoding="utf-8"))
+        for path in (ROOT / ".homeycompose/capabilities").glob("*.json")
+    }
+
+
 def test_the_capability_and_driver_assets_exist():
     """`homey app validate` checks these, but only after a build; a missing driver image is
     otherwise a device with a blank tile."""
-    assert (ROOT / "assets/capabilities/visitcar.svg").exists()
-    # `parking.svg` went with the 주차장명 capability that referenced it. An orphaned asset in a
-    # public repo is the kind of thing a reader mistakes for a live surface.
-    assert not (ROOT / "assets/capabilities/parking.svg").exists()
+    for name, spec in _capability_specs().items():
+        icon = ROOT / spec["icon"].lstrip("/")
+        assert icon.exists(), f"{name} points at a missing icon: {spec['icon']}"
+
     assert (ROOT / "drivers/visitcar/assets/icon.svg").exists()
     for name in ("small", "large", "xlarge"):
         assert (ROOT / "drivers/visitcar/assets/images" / f"{name}.png").exists()
+
+
+def test_no_capability_icon_is_left_orphaned():
+    """An unused SVG in a public repo is the kind of thing a reader mistakes for a live
+    surface. `parking.svg` went with the 주차장명 capability; `visitcar.svg` went when the
+    icons moved to MDI."""
+    referenced = {
+        Path(spec["icon"]).name for spec in _capability_specs().values()
+    }
+    present = {path.name for path in (ROOT / "assets/capabilities").glob("*.svg")}
+
+    assert present == referenced, f"orphaned: {sorted(present - referenced)}"
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted((ROOT / "assets/capabilities").glob("*.svg")),
+    ids=lambda p: p.stem,
+)
+def test_capability_icons_are_filled_paths_not_strokes(path):
+    """**Homey renders a capability icon as a mask**, so it uses the path geometry and
+    ignores `stroke`. The icon this app shipped until v0.2.2 was a line drawing of a car —
+    `fill="none" stroke="#000"` — which masked into a solid black blob, the outline's own
+    shape filled in, on every sensor and every tile button.
+
+    That is invisible in a browser, where the SVG renders exactly as drawn, and only shows on
+    a hub. Hence a test rather than a look: any icon whose geometry is meant to be seen as a
+    stroke is wrong here, no matter how it previews.
+    """
+    svg = path.read_text(encoding="utf-8")
+
+    assert 'fill="none"' not in svg, "masks ignore fill:none — the shape fills in solid"
+    assert "stroke" not in svg, "masks ignore stroke — draw the shape as a filled path"
+    assert 'viewBox="0 0 24 24"' in svg, "Homey capability icons are 24×24"
 
 
 def test_lots_ok_still_describes_the_lot_these_tests_pair():

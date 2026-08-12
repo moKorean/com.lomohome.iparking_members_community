@@ -62,8 +62,12 @@
 **클린룸(clean-room) 클라이언트**입니다. API 관찰 내역은 [`docs/RECON.md`](./docs/RECON.md)에
 그대로 남겨 두었습니다.
 
-라이선스는 **MIT**입니다 (`LICENSE` 참고). 이식·포팅된 코드가 없으므로 `NOTICE` 파일은
-없습니다.
+라이선스는 **MIT**입니다 (`LICENSE` 참고). **코드는** 포팅된 것이 없습니다.
+
+**그림은 다릅니다.** 기기 화면의 캐패빌리티 아이콘은
+[Material Design Icons](https://pictogrammers.com/library/mdi/)(Pictogrammers)에서 가져온
+것으로, Apache 2.0 라이선스입니다. 어떤 아이콘을 어디에 썼는지와 원본에서 무엇을 바꿨는지는
+[`NOTICE`](./NOTICE)에, 라이선스 전문은 `assets/capabilities/LICENSE-mdi.txt`에 있습니다.
 
 Homey 앱 자체는 © 2026 Geunwon Mo.
 

@@ -190,6 +190,26 @@ only checked the ciphertext, so it stayed green while the document claimed one b
 to another body's envelope. That test now asserts both halves. **To change a sample plate in
 the appendix, edit `scripts/gen_aes_fixtures.sh` and re-run it** — never the document alone.
 
+## Capability icons — filled paths, because Homey masks them
+
+Every capability icon lives in `assets/capabilities/mdi-*.svg` and comes from **Material Design
+Icons** (Pictogrammers, Apache 2.0). Attribution is in `NOTICE`; the licence copy is beside the
+icons. Adding or swapping one means updating `NOTICE` too — that is a licence obligation, not
+bookkeeping.
+
+**Homey renders a capability icon as a mask**: it takes the path geometry and ignores `stroke`
+entirely. The icon this app shipped until v0.2.2 was a line drawing (`fill="none"
+stroke="#000"`), so every sensor and every tile button rendered as a solid black blob — the
+outline's own shape filled in. It previewed perfectly in a browser and was only wrong on a hub,
+which is why `tests/test_capability_icons_are_filled_paths_not_strokes` exists: any icon whose
+geometry is meant to be read as a stroke is wrong here regardless of how it looks in an editor.
+MDI is a natural fit because every icon in it is a single filled 24×24 path.
+
+The mapping is one icon per meaning, and a shared icon on the ten tile buttons:
+`calendar-today` / `calendar-arrow-right` / `calendar-week` for 오늘·내일·이번 주,
+`car` for 현재 주차 중, `car-clock` for 다음 방문 예정, and `boom-gate-arrow-up` for every
+자주 오는 차량 button — the buttons do one thing, which is open a gate for a specific car.
+
 ## Never logged
 
 The password in any form; the `access_token` value (presence/length only); raw request

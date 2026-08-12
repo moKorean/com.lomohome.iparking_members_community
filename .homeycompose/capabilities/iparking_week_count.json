@@ -15,5 +15,5 @@
   "setable": false,
   "insights": true,
   "uiComponent": "sensor",
-  "icon": "/assets/capabilities/visitcar.svg"
+  "icon": "/assets/capabilities/mdi-calendar-week.svg"
 }

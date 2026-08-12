@@ -41,9 +41,12 @@ again:
 
 ## What does not change
 
-- **Licence: MIT** (matches `com.lomohome.navien`). This is a clean-room client
-  (no upstream code ported), so there is **no `NOTICE` file** — MIT only requires
-  reproducing a *ported* work's notice, and nothing here is ported.
+- **Licence: MIT** (matches `com.lomohome.navien`) for all code — this is a clean-room
+  client and nothing is ported. **There is now a `NOTICE`**, added when the capability
+  icons were replaced with Material Design Icons (Apache 2.0): redistributing Apache-2.0
+  artwork requires the licence copy and an attribution, and a published app is precisely
+  where that has to be right. The `NOTICE` also records the one modification made to the
+  originals, as §4(b) requires.
 - **Version bump + bilingual `.homeychangelog.json` entry per release.**
 - **`homey app validate --level publish` after every change.** It was always run as a
   hygiene gate rather than a submission step, and that does not change — it is simply

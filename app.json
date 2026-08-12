@@ -1,7 +1,7 @@
 {
   "_comment": "This file is generated. Please edit .homeycompose/app.json instead.",
   "id": "com.lomohome.iparking_members_community",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "compatibility": ">=13.0.0",
   "sdk": 3,
   "runtime": "python",
@@ -473,7 +473,7 @@
       "setable": false,
       "insights": false,
       "uiComponent": "sensor",
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-car-clock.svg"
     },
     "iparking_parked_now": {
       "type": "number",
@@ -491,7 +491,7 @@
       "setable": false,
       "insights": true,
       "uiComponent": "sensor",
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-car.svg"
     },
     "iparking_quick_1": {
       "type": "boolean",
@@ -503,7 +503,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_10": {
       "type": "boolean",
@@ -515,7 +515,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_2": {
       "type": "boolean",
@@ -527,7 +527,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_3": {
       "type": "boolean",
@@ -539,7 +539,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_4": {
       "type": "boolean",
@@ -551,7 +551,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_5": {
       "type": "boolean",
@@ -563,7 +563,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_6": {
       "type": "boolean",
@@ -575,7 +575,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_7": {
       "type": "boolean",
@@ -587,7 +587,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_8": {
       "type": "boolean",
@@ -599,7 +599,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_quick_9": {
       "type": "boolean",
@@ -611,7 +611,7 @@
       "setable": true,
       "uiComponent": "button",
       "uiQuickAction": true,
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-boom-gate-arrow-up.svg"
     },
     "iparking_today_count": {
       "type": "number",
@@ -629,7 +629,7 @@
       "setable": false,
       "insights": true,
       "uiComponent": "sensor",
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-calendar-today.svg"
     },
     "iparking_tomorrow_count": {
       "type": "number",
@@ -647,7 +647,7 @@
       "setable": false,
       "insights": true,
       "uiComponent": "sensor",
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-calendar-arrow-right.svg"
     },
     "iparking_week_count": {
       "type": "number",
@@ -665,7 +665,7 @@
       "setable": false,
       "insights": true,
       "uiComponent": "sensor",
-      "icon": "/assets/capabilities/visitcar.svg"
+      "icon": "/assets/capabilities/mdi-calendar-week.svg"
     }
   }
 }

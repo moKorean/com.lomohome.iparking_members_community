@@ -46,5 +46,9 @@
   "0.2.1": {
     "ko": "\"다음 방문 예정\"이 기기 화면에서 잘리던 문제를 고쳤습니다. 날짜를 짧게 표시해 (`8/15 토 · 12가1234`) 차량번호까지 다 보입니다. 등록 알림은 지금처럼 연도까지 표시합니다.",
     "en": "Fixed \"Next visit\" being cut off on the device tile. The date is now shown short (`8/15 Sat · 12가1234`) so the plate number fits too. Registration notifications still show the full date including the year."
+  },
+  "0.2.2": {
+    "ko": "기기 화면의 아이콘이 전부 까맣게 칠해져 보이던 문제를 고쳤습니다. 센서와 버튼마다 알맞은 아이콘이 붙습니다 — 오늘·내일·이번 주는 달력, 현재 주차 중은 차, 다음 방문 예정은 시계가 달린 차, 자주 오는 차량 버튼은 차단기입니다.",
+    "en": "Fixed every icon on the device tile rendering as a solid black shape. Each sensor and button now has an icon that fits: calendars for today, tomorrow and this week, a car for parked now, a car with a clock for the next visit, and a boom gate for the frequent-vehicle buttons."
   }
 }
