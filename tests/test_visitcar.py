@@ -18,6 +18,7 @@ No event-loop plugin is installed, so each test drives `asyncio.run` itself.
 """
 
 import asyncio
+import hashlib
 import importlib.util
 import json
 from datetime import timedelta
@@ -1459,28 +1460,41 @@ def test_the_app_icon_is_not_the_driver_icon():
     assert app_icon.strip() != driver_icon.strip()
 
 
-def test_the_generated_images_are_newer_than_the_art_they_come_from():
-    """Every shipped PNG is generated from an SVG by `scripts/make_images.py`, and nothing
+def test_the_generated_images_match_the_art_they_come_from():
+    """Every shipped PNG is generated from `docs/` by `scripts/make_images.py`, and nothing
     else checks that someone actually re-ran it.
 
-    This is not hypothetical: the app-store PNGs were regenerated from a hand-made
-    intermediate `docs/app-image.png` that was itself nine days older than the drawing it
-    claimed to come from, so an edited SVG shipped as the previous picture. The script now
-    rasterizes the SVGs directly; this makes forgetting to run it a test failure rather than
-    a surprise on the store page.
+    Not hypothetical: the app-store PNGs were being resized from a hand-made intermediate
+    that was nine days older than the drawing it claimed to come from, so an edited source
+    shipped as the previous picture. The script now rasterizes the sources directly and
+    records their hashes; this turns forgetting to run it into a test failure rather than a
+    surprise on the store page.
+
+    **Hashes, not timestamps.** The first version of this test compared mtimes. It passed on
+    every machine that had just run the script and failed on every CI run, because git does
+    not record mtimes — a fresh checkout stamps everything with the checkout time in whatever
+    order it wrote the files, and the images lost by three milliseconds. Content is the only
+    thing that survives a clone.
+
+    It does **not** hash the PNGs themselves: librsvg renders slightly differently between
+    versions, so pinning output bytes would fail for a contributor on a different librsvg
+    while the images were entirely correct. What matters is that the sources have not moved
+    since the outputs were made, and that is exactly what this asserts.
     """
-    pairs = [
-        # The app image is a viewBox crop over a photograph, so **both** files are sources:
-        # re-framing edits the SVG, re-shooting replaces the JPEG, and either one alone
-        # leaves the shipped PNGs stale.
-        (ROOT / "assets/images", [ROOT / "docs/app-image.svg", ROOT / "docs/app-image.jpg"]),
-        (ROOT / "drivers/visitcar/assets/images", [ROOT / "docs/device-image-visitcar.svg"]),
-    ]
-    for folder, sources in pairs:
-        newest = max(source.stat().st_mtime for source in sources)
-        for image in sorted(folder.glob("*.png")):
-            assert image.stat().st_mtime >= newest, (
-                f"{image.relative_to(ROOT)} is older than its source art — "
+    manifest = json.loads(
+        (ROOT / "docs/generated-images.json").read_text(encoding="utf-8")
+    )
+    assert manifest, "the manifest is empty — run `python3 scripts/make_images.py`"
+
+    for folder, sources in manifest.items():
+        images = sorted((ROOT / folder).glob("*.png"))
+        assert images, f"{folder} has no generated images"
+        for name, recorded in sources.items():
+            source = ROOT / name
+            assert source.exists(), f"{name} is recorded as a source but is missing"
+            current = hashlib.sha256(source.read_bytes()).hexdigest()
+            assert current == recorded, (
+                f"{name} has changed since {folder} was generated — "
                 "run `python3 scripts/make_images.py`"
             )
 
