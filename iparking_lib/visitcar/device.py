@@ -579,10 +579,15 @@ class VisitCarDevice_(device.Device):
         await self._set(CAPABILITY_NEXT_VISIT, await self._describe_next(upcoming))
 
     async def _describe_next(self, row) -> str:
-        """`2026-08-15 (토) · 12가1234`, or `—` when nothing is booked.
+        """`8/15 토 · 12가1234`, or `—` when nothing is booked.
 
-        The date goes through `dates.format_kst_human`, the same formatter the register
-        notification uses, so the tile and the message cannot spell the same day differently.
+        **`format_kst_short`, not `format_kst_human`.** The full form
+        (`2026-08-15 (토) · 12가1234`) is 26 characters, and Homey truncates a tile value to
+        fit — which turned the plate, the half a user is actually scanning for, into an
+        ellipsis. The year is what gets dropped: every date this can show is within
+        `MAX_DAYS_AHEAD` of today, so it was never carrying information here. The
+        notification still uses the long form, where the year is the whole point (see
+        `format_kst_short`).
 
         The plate is **not** masked here, unlike every log line. This is the user reading
         their own tile — `12가****` would make the value useless — and the tile is only ever
@@ -592,7 +597,7 @@ class VisitCarDevice_(device.Device):
             return NO_UPCOMING_VISIT
         language = await compat.ui_language(self.homey)
         try:
-            when = dates.format_kst_human(str(row.invitation_date), language)
+            when = dates.format_kst_short(str(row.invitation_date), language)
         except Exception:
             # A malformed date from the vendor must not blank the whole tile; the raw value is
             # still more useful than an em dash.

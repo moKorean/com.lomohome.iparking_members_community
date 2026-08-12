@@ -961,7 +961,7 @@ def test_next_visit_names_the_soonest_upcoming_day_and_plate(make_device):
     value = dev.get_capability_value(CAPABILITY_NEXT_VISIT)
 
     assert PLATE in value
-    assert dates.format_kst_human(dates.shift_api(today, 3)) in value
+    assert dates.format_kst_short(dates.shift_api(today, 3)) in value
     assert PLATE_2 not in value
 
 
@@ -970,7 +970,7 @@ def test_next_visit_counts_today_as_still_upcoming(make_device):
     moment the date arrives would answer a question nobody asked."""
     dev, _homey = make_device(api=_StubApi(history_rows=[_hist(1)]))
 
-    assert dates.format_kst_human(dates.today_api()) in dev.get_capability_value(
+    assert dates.format_kst_short(dates.today_api()) in dev.get_capability_value(
         CAPABILITY_NEXT_VISIT
     )
 
@@ -985,6 +985,28 @@ def test_next_visit_ignores_cancelled_rows(make_device):
     ]))
 
     assert PLATE_2 in dev.get_capability_value(CAPABILITY_NEXT_VISIT)
+
+
+def test_next_visit_stays_short_enough_for_a_tile(make_device):
+    """The whole reason for `format_kst_short`.
+
+    The long form (`2026-08-15 (토) · 12가1235`) is 26 characters and Homey truncated it — and
+    it truncates from the right, so what disappeared was the plate, the half a user is
+    actually scanning for. The year is what was dropped to buy the room back: every date this
+    can show is inside `MAX_DAYS_AHEAD`, so it carried no information here.
+
+    Asserted against the *longest* plate the vendor's own regex accepts (`외교123456`), because
+    a bound that only holds for a short plate is not a bound.
+    """
+    today = dates.today_api()
+    dev, _homey = make_device(api=_StubApi(history_rows=[
+        _hist(1, date=dates.shift_api(today, 40), plate="외교123456"),
+    ]))
+
+    value = dev.get_capability_value(CAPABILITY_NEXT_VISIT)
+
+    assert "외교123456" in value, "the plate must survive — it is the point of the value"
+    assert len(value) <= 20, f"too long for a tile: {value!r} ({len(value)} chars)"
 
 
 def test_next_visit_shows_a_dash_when_nothing_is_booked(make_device):

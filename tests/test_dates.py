@@ -34,6 +34,7 @@ from iparking_lib.iparking.dates import (
     DateTooFarError,
     PastDateError,
     format_kst_human,
+    format_kst_short,
     is_past,
     now_kst,
     resolve_visit_date,
@@ -345,6 +346,57 @@ def test_weekday_names_in_both_locales(day, ko, en):
     assert format_kst_human(resolved) == f"{day} ({ko})"
     assert format_kst_human(resolved, "ko") == f"{day} ({ko})"
     assert format_kst_human(resolved, "en") == f"{day} ({en})"
+
+
+# --- format_kst_short: the tile's version -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "day,ko,en",
+    [
+        ("2026-08-03", "8/3 월", "8/3 Mon"),
+        ("2026-08-09", "8/9 일", "8/9 Sun"),
+        ("2026-12-25", "12/25 금", "12/25 Fri"),
+        ("2027-01-01", "1/1 금", "1/1 Fri"),
+    ],
+)
+def test_format_kst_short_drops_the_year_and_the_padding(day, ko, en):
+    """`8/3 월`, not `08/03`. Both locales, and a January date so a `%-m` style bug that
+    only shows on single-digit months cannot hide behind August."""
+    resolved = to_api_date(day)
+    assert format_kst_short(resolved) == ko
+    assert format_kst_short(resolved, "ko") == ko
+    assert format_kst_short(resolved, "en") == en
+
+
+def test_format_kst_short_is_short_enough_to_be_worth_having():
+    """The reason it exists. If it were not materially shorter than the long form, the tile
+    would be carrying two formatters for nothing."""
+    resolved = to_api_date("2026-12-25")
+
+    assert len(format_kst_short(resolved)) < len(format_kst_human(resolved)) - 5
+
+
+def test_the_long_form_keeps_the_year_that_the_short_one_drops():
+    """These two must not converge. The notification's job is to expose a misparsed Flow
+    `date` argument, and `dd-mm-yyyy` vs `mm-dd-yyyy` is only decidable **with** the year
+    in view — so shortening `format_kst_human` to match the tile would delete the mitigation."""
+    resolved = to_api_date("2026-08-05")
+
+    assert "2026" in format_kst_human(resolved)
+    assert "2026" not in format_kst_short(resolved)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "20260805",
+        ApiDate(date(2026, 8, 5), "yyyy-mm-dd", ambiguous=False),
+        date(2026, 8, 5),
+    ],
+)
+def test_format_kst_short_accepts_the_same_inputs_as_the_long_form(value):
+    assert format_kst_short(value) == "8/5 수"
 
 
 def test_format_kst_human_matches_the_specified_example():

@@ -237,6 +237,28 @@ def format_kst_human(value: ApiDate | date | str, language: str = "ko") -> str:
     return f"{resolved.isoformat()} ({names[resolved.weekday()]})"
 
 
+def format_kst_short(value: ApiDate | date | str, language: str = "ko") -> str:
+    """`"8/14 금"` — the same date with a tile's worth of room.
+
+    A **second** formatter rather than a shorter version of `format_kst_human`, because the
+    two answer different questions and only one of them can afford to drop information:
+
+    * The notification's job is to make a misparsed Flow `date` argument obvious on sight
+      (`dd-mm-yyyy` and `mm-dd-yyyy` are shape-identical). **It needs the year**, so it keeps
+      the full ISO form.
+    * A tile's job is to be readable at a glance in a fixed width. `2026-08-14 (금) ·
+      12가1234` is 26 characters and Homey truncates it to something ending in an ellipsis,
+      which is strictly worse than a shorter string that fits.
+
+    The year is what goes, and it is the safest thing to drop here: the only dates this can
+    show are within `MAX_DAYS_AHEAD` of today, so the year is never in question. No zero
+    padding, for the same reason — every character earned back is one the plate can use.
+    """
+    resolved = _as_date(value)
+    names = _WEEKDAYS_KO if (language or "")[:2].lower() == "ko" else _WEEKDAYS_EN
+    return f"{resolved.month}/{resolved.day} {names[resolved.weekday()]}"
+
+
 def _as_date(value: ApiDate | date | str) -> date:
     if isinstance(value, ApiDate):
         return value.resolved

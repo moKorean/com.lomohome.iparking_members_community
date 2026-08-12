@@ -82,7 +82,7 @@ The Homey app itself is © 2026 Geunwon Mo.
   | Expected tomorrow | The same, one day on |
   | Expected this week | The next 7 days **from today** — rolling, not a calendar week, so a Sunday evening still shows Monday's guests |
   | Parked now | Visitor vehicles currently inside the complex. The counts say *expected*; this says *here* |
-  | Next visit | The soonest upcoming day and plate (`2026-08-15 (Sat) · 12가1234`) |
+  | Next visit | The soonest upcoming day and plate (`8/15 Sat · 12가1234`) |
 
   All five come out of **the same single read** — four extra sensors, and not one extra
   request. They refresh hourly (± 10 %), update immediately and at **no extra request** when
