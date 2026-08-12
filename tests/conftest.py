@@ -97,11 +97,19 @@ def lots_ok(rows=None):
     }
 
 
-def history_ok(rows=(), total=()):
+def history_ok(rows=(), total=(), total_cnt=None, seq_base=3184550):
     """A 등록 내역 envelope. `rows` are `(car_number, date, status)` or full dicts.
 
     `total` defaults to `[]`, which is what the real server returned even on a 43-record
     range — verified twice, hence never used as a status aggregate.
+
+    `total_cnt` overrides `totalCnt` so a page can say the window holds more than it
+    returned, which is the only way to exercise `client.history`'s paging. It defaults to
+    the page's own length, i.e. "this is everything" — one request, as before.
+
+    `seq_base` shifts the generated `invt_seq` values so two pages of a paged fixture hold
+    genuinely different rows; leaving both pages on the same base is how you build the
+    *server-ignores-`current_page`* case instead.
     """
     built = []
     for index, row in enumerate(rows, start=1):
@@ -113,7 +121,7 @@ def history_ok(rows=(), total=()):
         car, date, status = row
         built.append({
             "invitation_date": date,
-            "invt_seq": 3184550 + index,
+            "invt_seq": seq_base + index,
             "car_number": car,
             "inot_status": status,
             "park_name": PARK_NAME,
@@ -121,7 +129,7 @@ def history_ok(rows=(), total=()):
         })
     return {
         "result": "0000",
-        "totalCnt": len(built),
+        "totalCnt": len(built) if total_cnt is None else total_cnt,
         "resultData": {"total": list(total), "invitationList": built},
     }
 

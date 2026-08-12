@@ -42,8 +42,10 @@ guess loud until then.
 visit-date window (not in the past, not beyond `MAX_DAYS_AHEAD`) and is what the register
 path and the Flow card must call. They are separate because the window is a *policy about one
 field*, not a property of the format: the 등록 내역 history query legitimately asks for dates
-three months in the past (`docs/RECON.md` §4), and folding the window into the parser would
-either break that query or push it into re-implementing date parsing.
+`HISTORY_DAYS_BACK` in the past *and* `HISTORY_DAYS_AHEAD` in the future — both outside what
+`resolve_visit_date` allows, the second deliberately so (90 > `MAX_DAYS_AHEAD`) — and folding
+the window into the parser would either break that query or push it into re-implementing date
+parsing.
 """
 
 from __future__ import annotations

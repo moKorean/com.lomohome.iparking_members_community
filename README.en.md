@@ -100,8 +100,10 @@ The Homey app itself is © 2026 Geunwon Mo.
   "already registered" outcome and the uncertain-outcome guidance all behave identically. Saving
   normalizes the plate in place so you see what was stored (`12가 3456` → `12가3456`). A
   half-filled slot or an invalid plate produces no button, and the log says which slot and why.
-- **Registration history** — view and cancel past registrations from the app settings page,
-  **newest visit first**. Cancelling takes **two presses**: the first turns the button into
+- **Registration history** — view and cancel registrations from the app settings page,
+  **newest visit first**. The window runs **three months back and three months ahead**, so
+  visits that have not happened yet sit at the top of the table — those are the ones you
+  actually want to check. Cancelling takes **two presses**: the first turns the button into
   `Really cancel?`, the second performs it, and it reverts after five seconds. It withdraws a
   real access grant immediately, so it should not fire on one stray click.
 - **Already-registered guidance** — re-registering the same plate is reported as a
@@ -156,9 +158,10 @@ Not defects in this app but properties of the server it talks to, and you will m
 - **Pressing a button on the device tile shows no toast.** The Homey SDK has no success-toast
   API — the whole surface was checked — so the outcome goes to the **timeline** instead.
   Registering from the app settings page does show an in-page toast.
-- **A visit date must be within 80 days of today.** The history endpoint is limited to the last
-  three months; whether the *write* endpoint enforces the same bound was never verified, so this
-  is a deliberately conservative cap.
+- **A visit date must be within 80 days of today.** The history endpoint's *backward* reach is
+  limited to three months; whether the *write* endpoint enforces the same bound was never
+  verified, so this is a deliberately conservative cap. The history table reads 90 days ahead,
+  so every date this app can register is a date it can also show you.
 
 ## Build
 

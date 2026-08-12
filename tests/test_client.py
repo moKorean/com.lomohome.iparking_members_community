@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import urllib.error
+from datetime import datetime, timedelta
 
 import pytest
 from conftest import (
@@ -32,12 +33,16 @@ from conftest import (
 )
 
 from iparking_lib.const import (
+    HISTORY_DAYS_AHEAD,
+    HISTORY_DAYS_BACK,
+    HISTORY_MAX_PAGES,
     LOGIN_ATTEMPTS,
     MEMBERS_HOST,
     OAUTH_HOST,
     READ_ATTEMPTS,
     RECOVERY_ATTEMPTS,
 )
+from iparking_lib.iparking import dates
 from iparking_lib.iparking.client import (
     HistoryRow,
     IparkingApi,
@@ -614,6 +619,124 @@ def test_history_requests_the_whole_window_in_one_call(make_api):
     assert sent["current_page"] == 1
     assert sent["storSeq"] == STOR_SEQ
     assert sent["parkSeq"] == PARK_SEQ
+
+
+# --- the default history window reaches forward, not only back -------------------
+#
+# It used to end at today, which reads as "everything" and is not: a visit registered for next
+# week simply did not appear in the 등록 내역 table. Reported from the maintainer's own hub.
+
+
+def test_the_default_history_window_reaches_into_the_future(make_api):
+    """`endDate` is today + `HISTORY_DAYS_AHEAD`, not today.
+
+    Asserted against the *dates module's* today rather than a frozen literal, because the
+    window is recomputed per call on purpose — a cached one survives KST midnight.
+    """
+    from iparking_lib.iparking import crypto, dates
+
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: history_ok()})
+
+    asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+    sent = crypto.decode_body(stub.bodies_for(HISTORY_URL)[0])
+
+    today = datetime.strptime(dates.today_api(), "%Y%m%d").date()
+    assert sent["endDate"] == (today + timedelta(days=HISTORY_DAYS_AHEAD)).strftime("%Y%m%d")
+    assert sent["startDate"] == (today - timedelta(days=HISTORY_DAYS_BACK)).strftime("%Y%m%d")
+    assert sent["endDate"] > sent["startDate"]
+
+
+def test_the_forward_window_covers_every_date_this_app_can_register(make_api):
+    """The read window must outrun the write window, or the app hides its own writes.
+
+    `resolve_visit_date` accepts a visit up to `MAX_DAYS_AHEAD` out; if the history window
+    stopped short of that, a registration this app itself created would be invisible in the
+    table it created it from.
+    """
+    assert HISTORY_DAYS_AHEAD >= dates.MAX_DAYS_AHEAD
+
+
+def test_explicit_window_bounds_still_win_over_the_defaults(make_api):
+    """The one-day poll and the register path's recovery both pass exact bounds, and a
+    default that overrode them would make the 오늘 등록 count cover six months."""
+    from iparking_lib.iparking import crypto
+
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: history_ok()})
+
+    asyncio.run(api.history(
+        park_seq=PARK_SEQ, stor_seq=STOR_SEQ, start_date="20260805", end_date="20260805"
+    ))
+    sent = crypto.decode_body(stub.bodies_for(HISTORY_URL)[0])
+
+    assert sent["startDate"] == "20260805"
+    assert sent["endDate"] == "20260805"
+
+
+# --- paging: a six-month window can outgrow one page -----------------------------
+#
+# The vendor answers *oldest first*, so a truncated read drops the newest rows — the upcoming
+# visits, i.e. exactly what widening the window was for. `totalCnt` is what reveals it.
+
+
+def test_history_pages_until_it_has_every_row_the_server_counted(make_api):
+    from iparking_lib.iparking import crypto
+
+    api, stub, _ = make_api({
+        OAUTH_URL: login_ok(),
+        HISTORY_URL: [
+            history_ok((("12가1111", "20260501", "OUT"),), total_cnt=2, seq_base=100),
+            history_ok((("12가2222", "20261001", "RESERVE"),), total_cnt=2, seq_base=200),
+        ],
+    })
+
+    rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+
+    assert [r.car_number for r in rows] == ["12가1111", "12가2222"]
+    pages = [crypto.decode_body(b)["current_page"] for b in stub.bodies_for(HISTORY_URL)]
+    assert pages == [1, 2]
+
+
+def test_history_stops_when_the_server_ignores_current_page(make_api):
+    """Both pages answer with the same rows — the shape a server that does not honour
+    `current_page` produces. Repeating them forever is the failure this must not have."""
+    page = history_ok((("12가1111", "20260501", "OUT"),), total_cnt=99, seq_base=100)
+
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: [page, page, page]})
+
+    rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+
+    assert [r.car_number for r in rows] == ["12가1111"]
+    assert len(stub.bodies_for(HISTORY_URL)) == 2
+
+
+def test_history_never_exceeds_the_page_guard(make_api):
+    """A server that keeps promising more rows and keeps delivering new ones still has to
+    stop somewhere; `HISTORY_MAX_PAGES` is that somewhere."""
+    pages = [
+        history_ok(((f"12가111{n}", "20260501", "OUT"),), total_cnt=9999, seq_base=n * 100)
+        for n in range(1, HISTORY_MAX_PAGES + 3)
+    ]
+
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: pages})
+
+    rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+
+    assert len(stub.bodies_for(HISTORY_URL)) == HISTORY_MAX_PAGES
+    assert len(rows) == HISTORY_MAX_PAGES
+
+
+def test_a_missing_total_count_reads_as_this_is_everything(make_api):
+    """No `totalCnt` must mean one request, not a loop against a server that never said how
+    much there was."""
+    envelope_without_total = history_ok((("12가1111", "20260501", "OUT"),))
+    envelope_without_total.pop("totalCnt")
+
+    api, stub, _ = make_api({OAUTH_URL: login_ok(), HISTORY_URL: envelope_without_total})
+
+    rows = asyncio.run(api.history(park_seq=PARK_SEQ, stor_seq=STOR_SEQ))
+
+    assert len(rows) == 1
+    assert len(stub.bodies_for(HISTORY_URL)) == 1
 
 
 def test_an_unparseable_history_row_is_skipped_rather_than_fatal(make_api):

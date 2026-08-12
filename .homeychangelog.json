@@ -30,5 +30,9 @@
   "0.1.7": {
     "ko": "센서 이름을 \"오늘 방문 예정\"으로 바꿨습니다. 등록 내역의 취소 버튼이 눌러도 아무 일이 없던 문제를 고쳤습니다 — 이제 한 번 누르면 \"정말 취소?\"로 바뀌고, 다시 누르면 취소됩니다.",
     "en": "The sensor is now called “Expected today”. Fixed the Cancel button in the registration history doing nothing when pressed — it now arms on the first press and cancels on the second."
+  },
+  "0.1.8": {
+    "ko": "등록 내역이 앞으로의 방문도 보여줍니다. 지금까지는 오늘까지만 조회해서, 내일 이후로 등록해 둔 차량이 표에 아예 나오지 않았습니다. 이제 지난 3개월과 앞으로 3개월을 함께 불러오고, 앞으로 방문할 차량이 맨 위에 옵니다.",
+    "en": "The registration history now shows upcoming visits. It previously stopped at today, so a vehicle registered for tomorrow or later never appeared in the table at all. It now covers three months back and three months ahead, with upcoming visits listed first."
   }
 }

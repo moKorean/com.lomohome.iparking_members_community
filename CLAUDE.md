@@ -105,6 +105,27 @@ Three rules, and each is a defect avoided rather than a preference:
 own name. Polling a constant was waste; polling a count is what makes it true. That distinction is
 the whole justification for the traffic — do not reattach the loop to a value that cannot change.
 
+## The 등록 내역 window reaches forward, and that is the point
+
+`client.history()` defaults to `HISTORY_DAYS_BACK` (90) **behind** and `HISTORY_DAYS_AHEAD`
+(90) **ahead** of KST today. An `endDate` of today reads like "the whole history" and is not:
+it hides every visit that has not happened yet, which is most of what the table exists to
+show — a registration made for next week was simply absent, reported from the maintainer's own
+hub. A future `endDate` is accepted by the server (recon queried seven days ahead and got a
+normal answer), and 90 ≥ `dates.MAX_DAYS_AHEAD` (80) so the read window always covers every
+date this app is able to write.
+
+Two consequences worth keeping:
+
+- **`history()` pages.** The window is twice the range that measured 43 rows, and the vendor
+  answers **oldest first**, so a read truncated at `page_size` drops the *newest* rows — the
+  upcoming visits. The loop follows `totalCnt`, stops on a page that adds nothing new (a
+  server ignoring `current_page` would otherwise repeat forever) and is bounded by
+  `HISTORY_MAX_PAGES`.
+- **Explicit bounds still win.** The device poll and the register path's recovery both pass
+  `start_date == end_date`; the wide default must never leak into either, or the 오늘 등록 count
+  silently starts counting six months.
+
 ## Disclosures — not boilerplate, keep them precise
 
 These describe a design the review deliberately chose, and they appear in both READMEs and

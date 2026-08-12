@@ -67,7 +67,9 @@ from iparking_lib.const import (
     ACTIVE_STATUSES,
     API_VERSION,
     CLIENT_OS_TYPE,
+    HISTORY_DAYS_AHEAD,
     HISTORY_DAYS_BACK,
+    HISTORY_MAX_PAGES,
     HISTORY_PAGE_SIZE,
     LOGIN_ATTEMPTS,
     MAX_WRITES_PER_HOUR,
@@ -637,11 +639,23 @@ class IparkingApi:
         page_size: int = HISTORY_PAGE_SIZE,
         attempts: int = READ_ATTEMPTS,
     ) -> list[HistoryRow]:
-        """등록 내역 rows for a window, newest-first as the server returns them.
+        """등록 내역 rows for a window, in the server's own order (oldest visit first).
+
+        Display order is not this method's business — `api._newest_first` reorders for the
+        table, and doing it in one place is what keeps the settings page and the planned
+        widget from drifting apart.
 
         `attempts` is exposed only so the register path's recovery re-query can raise it to
         `RECOVERY_ATTEMPTS` — see `_recover_register`. Ordinary callers (the settings table,
         the device poll) take the read default; a dropped history refresh costs a redraw.
+
+        **The whole window is returned, paging if the server needs it to.** `page_size` is
+        honoured verbatim (verified: 100 returned all 43 rows of a three-month window), so
+        one request is the normal case. But the default window is now six months, and the
+        vendor answers *oldest first* — so a window holding more rows than one page would
+        drop the newest ones, which are precisely the upcoming visits the table exists to
+        show. `totalCnt` says when that has happened and `current_page` fetches the rest,
+        exactly as the vendor's own infinite-scroll UI does.
 
         A non-empty `carNumber` **does** narrow the result server-side — verified live
         2026-08-04, 43 rows down to 19 for one plate — which is what makes the register
@@ -655,20 +669,45 @@ class IparkingApi:
         """
         today = dates.today_api()
         payload = {
-            "startDate": start_date or self._days_before(today, HISTORY_DAYS_BACK),
-            "endDate": end_date or today,
+            "startDate": start_date or self._shift_days(today, -HISTORY_DAYS_BACK),
+            # Forward as well as back. An `endDate` of today reads as "the whole history" but
+            # silently excludes every visit that has not happened yet — which is most of what
+            # the 등록 내역 table exists to show.
+            "endDate": end_date or self._shift_days(today, HISTORY_DAYS_AHEAD),
             "carNumber": car_number,
             "storSeq": int(stor_seq),
             "parkSeq": int(park_seq),
             "current_page": 1,
-            # `page_size` is honoured verbatim, so one request covers the whole window.
             "page_size": int(page_size),
         }
-        envelope = await self._authed("POST", "/invitations/list", payload, attempts=attempts)
-        return self._parse_history(envelope)
+        rows: list[HistoryRow] = []
+        seen: set[int] = set()
+        for page in range(1, HISTORY_MAX_PAGES + 1):
+            payload["current_page"] = page
+            envelope = await self._authed(
+                "POST", "/invitations/list", payload, attempts=attempts
+            )
+            page_rows, total = self._parse_history(envelope)
+            # A row with no `invt_seq` parses as 0 and cannot be told apart from another one,
+            # so it is never treated as a duplicate — dropping a real row is the worse error.
+            fresh = [row for row in page_rows if not row.invt_seq or row.invt_seq not in seen]
+            seen.update(row.invt_seq for row in fresh if row.invt_seq)
+            rows.extend(fresh)
+            # Three independent stops, because only the first is a documented contract. A
+            # server that ignores `current_page` would answer page 2 with page 1's rows
+            # forever; `fresh` being empty catches that without needing to know it happens.
+            if len(rows) >= total or not page_rows or not fresh:
+                break
+        return rows
 
     @staticmethod
-    def _parse_history(envelope: dict) -> list[HistoryRow]:
+    def _parse_history(envelope: dict) -> tuple[list[HistoryRow], int]:
+        """One page's rows, plus `totalCnt` — how many the window holds in all.
+
+        `totalCnt` defaults to the page's own length when it is absent or unparseable, which
+        reads as "this is everything" and stops the paging loop. That is the safe default:
+        the alternative is looping against a server that never said how much there was.
+        """
         data = envelope.get("resultData")
         rows = data.get("invitationList") if isinstance(data, dict) else None
         out: list[HistoryRow] = []
@@ -689,7 +728,11 @@ class IparkingApi:
                     park_name=str(row.get("park_name") or row.get("parkName") or ""),
                 )
             )
-        return out
+        try:
+            total = int(envelope.get("totalCnt"))
+        except (TypeError, ValueError):
+            total = len(out)
+        return out, total
 
     @staticmethod
     def aggregate_counts(envelope: dict) -> list[dict]:
@@ -1099,6 +1142,7 @@ class IparkingApi:
     # --- helpers ------------------------------------------------------------
 
     @staticmethod
-    def _days_before(api_date: str, days: int) -> str:
+    def _shift_days(api_date: str, days: int) -> str:
+        """`api_date` moved by `days` (negative = earlier), still `yyyyMMdd`."""
         parsed = datetime.strptime(api_date, dates.API_DATE_FORMAT)
-        return (parsed - timedelta(days=days)).strftime(dates.API_DATE_FORMAT)
+        return (parsed + timedelta(days=days)).strftime(dates.API_DATE_FORMAT)

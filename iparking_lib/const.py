@@ -93,13 +93,28 @@ API_VERSION = "2.0.0"
 CLIENT_OS_TYPE = "WEB"
 
 #: `page_size` is honoured verbatim (verified: 100 returned all 43 rows in one response),
-#: so the whole 3-month history arrives in a single request and pagination is a display
+#: so the whole window arrives in a single request and pagination is a display
 #: concern rather than a fetch concern.
 HISTORY_PAGE_SIZE = 100
 
 #: How far back the default history window reaches. The server caps it at 최근 3개월
 #: (the UI sets `minDate:'-3m'`), so asking for more returns no more.
 HISTORY_DAYS_BACK = 90
+
+#: How far **forward** it reaches. Not decoration: the rows a user cares about most are the
+#: visits that have not happened yet, and an `endDate` of today hides every one of them —
+#: a registration made for next week simply did not appear in the table.
+#:
+#: A future `endDate` is accepted by the server (recon 2026-08-04 queried `endDate:20260811`,
+#: seven days ahead, and got a normal 43-row answer). 90 days comfortably covers everything
+#: this app can create, since `dates.MAX_DAYS_AHEAD` caps a visit date at 80 days out.
+HISTORY_DAYS_AHEAD = 90
+
+#: How many pages `client.history` will fetch before it stops. A guard, not a target: one
+#: page is the normal case at `HISTORY_PAGE_SIZE` = 100, and this only exists so that a
+#: server which ignores `current_page` cannot turn a table refresh into an endless loop.
+#: Five pages is 500 rows over a six-month window — far past any real household's traffic.
+HISTORY_MAX_PAGES = 5
 
 # --- Register-path budgets --------------------------------------------------
 #

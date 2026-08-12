@@ -34,11 +34,11 @@
  *    is a bare `yyyy-mm-dd` wall-clock string with no timezone attached, so feeding it KST
  *    values makes this page agree with the server for a user in any timezone.
  *
- * Pagination here is **display-only**. `client.history()` asks the vendor for
- * `page_size: 100`, which was verified to return all 43 rows of a three-month window in one
- * response, so there is nothing to page over the network — `paginate()` slices an array that is
- * already complete. And `/history` returns no `total` aggregate (`resultData.total` came back
- * `[]` even on that 43-row range), so there is no summary row to render.
+ * Pagination here is **display-only**. `client.history()` hands back the whole window already
+ * assembled — `page_size: 100` covers it in one request in the normal case, and the client pages
+ * on `totalCnt` when it does not — so `paginate()` slices an array that is already complete.
+ * And `/history` returns no `total` aggregate (`resultData.total` came back `[]` even on a
+ * 43-row range), so there is no summary row to render.
  *
  * **Row order is the handler's, not this module's.** `/history` answers newest visit first
  * (`api._newest_first`), so `paginate()` slicing in received order puts the upcoming visits on
@@ -113,7 +113,9 @@
       noLots: "이 계정에서 주차장을 찾지 못했습니다.",
 
       historyTitle: "등록 내역",
-      historyIntro: "최근 3개월치를 한 번에 불러옵니다. 취소는 이 표에서 바로 할 수 있습니다.",
+      historyIntro:
+        "지난 3개월과 앞으로 3개월치를 한 번에 불러옵니다. 앞으로 방문할 차량이 위에 옵니다. " +
+        "취소는 이 표에서 바로 할 수 있습니다.",
       colDate: "방문예정일",
       colPlate: "차량번호",
       colStatus: "상태",
@@ -184,7 +186,9 @@
       noLots: "No parking lots were found on this account.",
 
       historyTitle: "Registration history",
-      historyIntro: "The last three months are fetched in one request. Cancel straight from this table.",
+      historyIntro:
+        "Three months back and three months ahead, fetched in one request. Upcoming visits " +
+        "come first. Cancel straight from this table.",
       colDate: "Visit date",
       colPlate: "Plate",
       colStatus: "Status",

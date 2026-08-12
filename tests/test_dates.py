@@ -304,13 +304,15 @@ def test_window_errors_are_distinguishable_from_format_errors():
 def test_resolve_visit_date_still_reports_ambiguity():
     """The window must not swallow the flag — the confirmation text depends on it.
 
-    Uses a day-of-month ≤ 12 within the window so that an ambiguous spelling exists at all;
-    such a day always exists in the next 12 days, so this is a real assertion every day of
-    the year rather than a conditional one.
+    Uses a day-of-month ≤ 12 within the window so that an ambiguous spelling exists at all.
+    The search runs to 31 days, not 12: from the 13th of a month the next twelve days hold no
+    day ≤ 12 at all, and this test used to raise `StopIteration` on those dates. 31 days always
+    reaches the 1st of the following month and stays well inside `MAX_DAYS_AHEAD`, so the
+    assertion is a real one every day of the year rather than a conditional one.
     """
     today = now_kst().date()
     target = next(
-        today + timedelta(days=n) for n in range(1, 13) if (today + timedelta(days=n)).day <= 12
+        today + timedelta(days=n) for n in range(1, 32) if (today + timedelta(days=n)).day <= 12
     )
     resolved = resolve_visit_date(target.strftime("%d-%m-%Y"))
     assert resolved.ambiguous is True

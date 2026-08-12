@@ -200,13 +200,20 @@ Verified response:
 - `inot_status`: `RESERVE` 미입차 / `IN` 주차중 / `OUT` 출차 / `CANCEL` 취소.
 - `resultData.total` was `[]` on my query (date range had no IN/RESERVE aggregation) —
   treat as optional and default counts to 0.
-- History window server-side: **최근 3개월만** (UI sets `minDate:'-3m'`).
+- History window server-side: **과거는 최근 3개월까지** (UI sets `minDate:'-3m'`).
+  The UI puts no equivalent cap on the *forward* side, and the query above used an `endDate`
+  seven days ahead of the capture date and answered normally — so a future `endDate` is
+  accepted. This app therefore reads 90 days back **and** 90 days forward: an `endDate` of
+  today hides every visit that has not happened yet, which is most of what the table is for.
 - Pagination: `totalPage = ceil(totalCnt / page_size)`; UI infinite-scrolls
   `current_page += 1`.
 - **`page_size` is honoured verbatim — verified.** Same query at `page_size:15` → 15 rows;
   at `page_size:100` → **all 43 rows in one response** (`totalCnt` 43 both times). So the
-  whole history can be fetched in a single request; client-side pagination is a display
-  concern, not a fetch concern.
+  whole history is normally fetched in a single request; client-side pagination is a display
+  concern, not a fetch concern. The client still pages when `totalCnt` exceeds what it got:
+  the six-month window it now asks for is twice the range that measured 43 rows, and because
+  the server answers **oldest first**, a truncated read would drop the *newest* rows — the
+  upcoming visits.
 - **`resultData.total` is `[]` even on a range returning 43 records — verified twice.** Do
   not rely on it for status counts. Treat it as optional display metadata: render an
   aggregate row if it is ever non-empty, omit it otherwise. Per-row `inot_status` is the

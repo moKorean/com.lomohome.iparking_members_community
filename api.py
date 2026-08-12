@@ -544,8 +544,8 @@ def _api_date_or_none(value: str) -> str | None:
     """A `yyyy-mm-dd` window bound from the page → `yyyyMMdd`, or `None` for "use the default".
 
     `to_api_date` rather than `resolve_visit_date`: the 등록 내역 window legitimately reaches
-    three months into the past, and the visit-date policy has no business being applied to a
-    read.
+    three months into the past *and* three months ahead — past `MAX_DAYS_AHEAD` in both
+    directions — and the visit-date policy has no business being applied to a read.
     """
     text = (value or "").strip()
     return str(dates.to_api_date(text)) if text else None
