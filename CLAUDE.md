@@ -197,10 +197,24 @@ App Store review (2026-08-13, approved with feedback) named all three. Keep them
 
 | File | Job | Review's note |
 |---|---|---|
-| `docs/icon.png` → `assets/icon.svg` | identifies the **app** | was identical to the driver icon — now **iParking's own logo**, supplied by the maintainer, embedded as a base64 data URI (Homey wants SVG; a trademark must not be traced by hand, and `docs/` is not packed so a file reference would break) |
+| `assets/icon.svg` | identifies the **app** | was identical to the driver icon — now a **vector trace of iParking's logo**, coordinates measured off `docs/icon.png` (which stays as the reference, not as a build input) |
 | `drivers/visitcar/assets/icon.svg` | identifies **one paired lot** on its tile | unchanged: barrier-and-car line art |
 | `docs/app-image.svg` + `docs/app-image.jpg` → `assets/images/*.png` | the **store page** picture | "an illustration"; now a **photograph** of a real iParking installation at an apartment complex, supplied by the maintainer. The SVG is only a viewBox crop frame over the JPEG — edit the four numbers to re-frame |
 | `docs/device-image-visitcar.svg` → `drivers/visitcar/assets/images/*.png` | the **device card** picture | also an illustration; now a plain P, which review suggested |
+
+**The app icon must be real geometry, not a raster in an SVG wrapper.** Embedding
+`docs/icon.png` as a base64 data URI validated at `publish` level and previewed correctly in a
+browser — and came out wrong on the hub. Homey wants paths here. The trace's numbers are
+measured from the PNG (plate `x=26`, `y=47..399`, apex `(425,223)`, corner radius 21; stem
+`x=70..86`, `y=95..354` with a round bottom; bowl arc about `(138,180)`, outer radius 85, inner
+69) and the bowl's lower terminal stops at `x=105` rather than meeting the stem — that notch is
+in the original and is the detail most likely to be "tidied away" by someone who has not
+compared the two side by side.
+
+**The `i PARKING™` wordmark is omitted on purpose.** It is 12 px tall on a 447 px canvas; at
+icon size it is an illegible smudge, and the alternative was faking letterforms that cannot be
+traced faithfully. Omitting a tiny wordmark is ordinary icon design — approximating a
+registered wordmark is not.
 
 **The app icon is iParking's logo, on the maintainer's instruction.** Review suggested it and
 they supplied the file after being told twice that a third party's trademark on a published
