@@ -63,12 +63,14 @@ MANIFEST = DOCS / "generated-images.json"
 
 #: output (repo-relative file or folder) -> the source files it is generated from.
 GENERATED_FROM = {
-    # The app image is a viewBox crop over a photograph, so both files are its source.
+    # Both of these frames are a viewBox over a supplied bitmap, so the bitmap is a source
+    # too: re-framing edits the SVG, a new artwork replaces the PNG/JPEG, and either one
+    # alone leaves the shipped images stale.
     "assets/images": ["docs/app-image.svg", "docs/app-image.jpg"],
-    **{
-        f"drivers/{driver_id}/assets/images": [f"docs/{source}"]
-        for driver_id, source in DEVICE_SOURCES.items()
-    },
+    "drivers/visitcar/assets/images": [
+        "docs/device-image-visitcar.svg",
+        "docs/app_intro_img03.png",
+    ],
 }
 
 

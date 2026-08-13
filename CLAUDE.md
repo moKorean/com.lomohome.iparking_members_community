@@ -200,7 +200,7 @@ App Store review (2026-08-13, approved with feedback) named all three. Keep them
 | `assets/icon.svg` | identifies the **app** | was identical to the driver icon — now a **vector trace of iParking's logo**, coordinates measured off `docs/icon.png` (which stays as the reference, not as a build input) |
 | `drivers/visitcar/assets/icon.svg` | identifies **one paired lot** on its tile | unchanged: barrier-and-car line art |
 | `docs/app-image.svg` + `docs/app-image.jpg` → `assets/images/*.png` | the **store page** picture | "an illustration"; now a **photograph** of a real iParking installation at an apartment complex, supplied by the maintainer. The SVG is only a viewBox crop frame over the JPEG — edit the four numbers to re-frame |
-| `docs/device-image-visitcar.svg` → `drivers/visitcar/assets/images/*.png` | the **device card** picture | also an illustration; now a plain P, which review suggested |
+| `docs/device-image-visitcar.svg` + `docs/app_intro_img03.png` → `drivers/visitcar/assets/images/*.png` | the **device card** picture | review asked for a plain P instead of an illustration; two of my drawings (a barrier scene, then the logo's P) were both rejected by the maintainer, and it is now **iParking's own isometric illustration**, framed by the SVG. Their artwork of their own equipment beats anything drawn here — but it *is* an illustration, so review may raise it again. The P is in git history. |
 
 **The app icon must be real geometry, not a raster in an SVG wrapper.** Embedding
 `docs/icon.png` as a base64 data URI validated at `publish` level and previewed correctly in a
