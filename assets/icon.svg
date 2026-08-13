@@ -1,34 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 447 447" width="447" height="447">
-  <!-- App icon: iParking's mark, as vector paths.
+  <!-- App icon: iParking's mark as a single silhouette — the arrow plate with the P cut out.
 
-       Used on the maintainer's instruction — App Store review suggested it too — from the
-       logo they supplied at `docs/icon.png`. The mark belongs to iParking; every README
-       still states this app is unaffiliated, which is what keeps this a reference rather
-       than a claim of endorsement.
+       Used on the maintainer's instruction; App Store review suggested it too. The mark
+       belongs to iParking, and every README still states this app is unaffiliated, which is
+       what keeps this a reference rather than a claim of endorsement.
 
-       **Traced, not embedded.** A previous version wrapped the PNG in an SVG as a base64
-       data URI, which validated and rendered fine in a browser and came out wrong on the
-       hub — Homey wants real geometry here, not a raster in an SVG envelope.
+       ## Why there is no background and no coloured P
 
-       The coordinates are measured off `docs/icon.png` (447x447) rather than eyeballed:
-       plate left edge x=26, top y=47, bottom y=399, arrow apex (425,223), corner radius 21;
-       stem x=70..88 running y=94..354; bowl an arc centred (138,180) with outer radius 86
-       and inner 68. The bowl's lower terminal stops at x=105 instead of meeting the stem —
-       that white notch is in the original and is the one detail most likely to be "tidied
-       away" by someone who has not compared the two.
+       **Homey draws the app icon as a mask.** It takes the geometry and paints it in its own
+       colour, so `fill` values here decide nothing. Two earlier attempts failed on that:
 
-       **The `i PARKING™` wordmark is deliberately left out.** In the source it is 12 px tall
-       on a 447 px canvas; at the size an app icon is actually drawn it is an illegible
-       smudge, and the honest options were to omit it or to fake letterforms I cannot trace
-       faithfully. Omitting a tiny wordmark is ordinary icon design; approximating somebody's
+       1. the PNG embedded as a base64 data URI — no geometry at all to mask;
+       2. a faithful full-colour trace, red background rect included — the background covered
+          the canvas, so the silhouette was a solid square and the logo vanished inside it.
+
+       So this file carries **one path and no background**: the plate is the shape, the P is a
+       hole in it, and the bowl's counter is an island inside that hole (three nested
+       subpaths, `fill-rule="evenodd"`). Whatever colour Homey paints it, the result reads as
+       the mark.
+
+       The fill is `#111111` rather than white, matching the published sibling app
+       (`com.lomohome.navien`) whose icon is known to render correctly. Under masking the
+       value is ignored either way, but if any surface ever draws this file as-authored, dark
+       survives a light card while white would disappear into one.
+
+       ## Geometry
+
+       Measured off `docs/icon.png` (447x447), not eyeballed: plate left edge x=26, y=47..399,
+       arrow apex (425,223), corner radius 21. Stem x=70..86, y=95..354, round bottom. Bowl an
+       arc about (138,180), outer radius 85, inner 69 — weight 16, which is what matched the
+       original when the two were rendered side by side.
+
+       **The bowl's lower terminal stops at x=105 instead of meeting the stem.** That notch is
+       in the original and is the detail most likely to be "tidied away" by someone who has
+       not compared the two.
+
+       The `i PARKING™` wordmark is omitted on purpose: 12 px tall on a 447 px canvas, it is an
+       illegible smudge at icon size, and the alternative was faking letterforms that cannot
+       be traced faithfully. Omitting a tiny wordmark is ordinary icon design; approximating a
        registered wordmark is not.
 
-       No <text>, no external font, no raster — so it renders identically everywhere. -->
+       No <text>, no external font, no raster — it renders identically everywhere. -->
 
-  <rect width="447" height="447" fill="#e64230"/>
-
-  <!-- the arrow plate -->
-  <path fill="#FFFFFF" d="M47 47
+  <path fill="#111111" fill-rule="evenodd"
+        d="M47 47
            H308
            Q328 47 338 65
            L415 206
@@ -39,14 +54,9 @@
            Q26 399 26 378
            V68
            Q26 47 47 47
-           Z" />
+           Z
 
-  <!-- the P: outer silhouette, with the bowl's counter punched out by fill-rule.
-       Stroke weight 16 (not 18 — the first trace read heavy against the original), bowl
-       outer radius 85 / inner 69 about (138,180), and the stem ends in a round cap because
-       the original does. -->
-  <path fill="#e64230" fill-rule="evenodd"
-        d="M70 95
+           M70 95
            H138
            A85 85 0 0 1 138 265
            H105
@@ -55,6 +65,7 @@
            V346
            A8 8 0 0 1 70 346
            Z
+
            M86 111
            H138
            A69 69 0 0 1 138 249

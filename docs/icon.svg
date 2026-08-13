@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 447 447" width="447" height="447">
+  <!-- App icon: iParking's mark, as vector paths.
+
+       Used on the maintainer's instruction — App Store review suggested it too — from the
+       logo they supplied at `docs/icon.png`. The mark belongs to iParking; every README
+       still states this app is unaffiliated, which is what keeps this a reference rather
+       than a claim of endorsement.
+
+       **Traced, not embedded.** A previous version wrapped the PNG in an SVG as a base64
+       data URI, which validated and rendered fine in a browser and came out wrong on the
+       hub — Homey wants real geometry here, not a raster in an SVG envelope.
+
+       The coordinates are measured off `docs/icon.png` (447x447) rather than eyeballed:
+       plate left edge x=26, top y=47, bottom y=399, arrow apex (425,223), corner radius 21;
+       stem x=70..88 running y=94..354; bowl an arc centred (138,180) with outer radius 86
+       and inner 68. The bowl's lower terminal stops at x=105 instead of meeting the stem —
+       that white notch is in the original and is the one detail most likely to be "tidied
+       away" by someone who has not compared the two.
+
+       **The `i PARKING™` wordmark is deliberately left out.** In the source it is 12 px tall
+       on a 447 px canvas; at the size an app icon is actually drawn it is an illegible
+       smudge, and the honest options were to omit it or to fake letterforms I cannot trace
+       faithfully. Omitting a tiny wordmark is ordinary icon design; approximating somebody's
+       registered wordmark is not.
+
+       No <text>, no external font, no raster — so it renders identically everywhere. -->
+
+  <rect width="447" height="447" fill="#e64230"/>
+
+  <!-- the arrow plate -->
+  <path fill="#FFFFFF" d="M47 47
+           H308
+           Q328 47 338 65
+           L415 206
+           Q425 223 415 240
+           L338 381
+           Q328 399 308 399
+           H47
+           Q26 399 26 378
+           V68
+           Q26 47 47 47
+           Z" />
+
+  <!-- the P: outer silhouette, with the bowl's counter punched out by fill-rule.
+       Stroke weight 16 (not 18 — the first trace read heavy against the original), bowl
+       outer radius 85 / inner 69 about (138,180), and the stem ends in a round cap because
+       the original does. -->
+  <path fill="#e64230" fill-rule="evenodd"
+        d="M70 95
+           H138
+           A85 85 0 0 1 138 265
+           H105
+           V249
+           H86
+           V346
+           A8 8 0 0 1 70 346
+           Z
+           M86 111
+           H138
+           A69 69 0 0 1 138 249
+           H86
+           Z" />
+</svg>
