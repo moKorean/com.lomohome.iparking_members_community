@@ -206,7 +206,7 @@ homey app validate --level publish   # 매 변경마다 실행 · 스토어 제�
 uv run pytest -q              # 순수 클라이언트 로직 단위 테스트
 ```
 
-스토어 이미지와 기기 이미지는 `docs/*.svg`(원본 벡터)에서 `scripts/make_images.py`로
-생성합니다. **SVG 를 손댔으면 스크립트를 다시 돌려야 합니다** — 안 돌리면 테스트가 잡습니다.
+스토어 이미지와 기기 이미지는 `docs/`의 원본에서 `scripts/make_images.py`로 생성합니다
+(각 `.svg`는 그림을 담는 프레임이고, 실제 그림은 그 옆의 사진·일러스트입니다). **SVG 를 손댔으면 스크립트를 다시 돌려야 합니다** — 안 돌리면 테스트가 잡습니다.
 `assets/icon.svg`(앱 아이콘)과 `drivers/visitcar/assets/icon.svg`(기기 아이콘)은 손으로
 관리하며, 스크립트가 건드리지 않습니다.

@@ -219,7 +219,8 @@ homey app validate --level publish    # run after every change; also the submiss
 uv run pytest -q                      # unit tests for the pure client logic
 ```
 
-Store and device images are generated from the vector sources in `docs/*.svg` by
-`scripts/make_images.py`. **Re-run it after editing any of them** — a test fails if you
+Store and device images are generated from the sources in `docs/` by
+`scripts/make_images.py` — each `.svg` there is a frame, and the artwork it frames is the
+photograph or illustration beside it. **Re-run it after editing any of them** — a test fails if you
 don't. `assets/icon.svg` (the app icon) and `drivers/visitcar/assets/icon.svg` (the device
 icon) are hand-maintained and the script never touches them.
