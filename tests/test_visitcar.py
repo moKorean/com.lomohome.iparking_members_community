@@ -1486,15 +1486,19 @@ def test_the_generated_images_match_the_art_they_come_from():
     )
     assert manifest, "the manifest is empty — run `python3 scripts/make_images.py`"
 
-    for folder, sources in manifest.items():
-        images = sorted((ROOT / folder).glob("*.png"))
-        assert images, f"{folder} has no generated images"
+    for output, sources in manifest.items():
+        target = ROOT / output
+        if target.is_dir():
+            assert sorted(target.glob("*.png")), f"{output} has no generated images"
+        else:
+            # `assets/icon.svg` is a single generated file, not a folder of sizes.
+            assert target.exists(), f"{output} is recorded as generated but is missing"
         for name, recorded in sources.items():
             source = ROOT / name
             assert source.exists(), f"{name} is recorded as a source but is missing"
             current = hashlib.sha256(source.read_bytes()).hexdigest()
             assert current == recorded, (
-                f"{name} has changed since {folder} was generated — "
+                f"{name} has changed since {output} was generated — "
                 "run `python3 scripts/make_images.py`"
             )
 

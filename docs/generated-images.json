@@ -1,4 +1,7 @@
 {
+  "assets/icon.svg": {
+    "docs/icon.png": "472c9eba721848d48eecb5358882b327fbf1c62789c34d76e01dff1ab00b1f8b"
+  },
   "assets/images": {
     "docs/app-image.jpg": "c5145aa8d65cd37acb178c1968f8b1bb4beeefe01d52f14b2f66ee8d0807bf7d",
     "docs/app-image.svg": "aceaeae30ceb401346495d8434bf4df3f587f902829cfa20b7c33bd49f5cdec7"

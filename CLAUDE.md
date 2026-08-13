@@ -197,15 +197,16 @@ App Store review (2026-08-13, approved with feedback) named all three. Keep them
 
 | File | Job | Review's note |
 |---|---|---|
-| `assets/icon.svg` | identifies the **app** | was identical to the driver icon — now an apartment block with a parking sign |
+| `docs/icon.png` → `assets/icon.svg` | identifies the **app** | was identical to the driver icon — now **iParking's own logo**, supplied by the maintainer, embedded as a base64 data URI (Homey wants SVG; a trademark must not be traced by hand, and `docs/` is not packed so a file reference would break) |
 | `drivers/visitcar/assets/icon.svg` | identifies **one paired lot** on its tile | unchanged: barrier-and-car line art |
 | `docs/app-image.svg` + `docs/app-image.jpg` → `assets/images/*.png` | the **store page** picture | "an illustration"; now a **photograph** of a real iParking installation at an apartment complex, supplied by the maintainer. The SVG is only a viewBox crop frame over the JPEG — edit the four numbers to re-frame |
 | `docs/device-image-visitcar.svg` → `drivers/visitcar/assets/images/*.png` | the **device card** picture | also an illustration; now a plain P, which review suggested |
 
-**The app icon is deliberately not iParking's logo**, which is what review suggested. Every
-README states this app is unaffiliated, and shipping a third party's trademark in a published
-app is the maintainer's call, not an asset-file detail. Raise it with them rather than
-quietly adopting it.
+**The app icon is iParking's logo, on the maintainer's instruction.** Review suggested it and
+they supplied the file after being told twice that a third party's trademark on a published
+listing is a rights question they own. Both the logo and the store photograph are used on that
+basis. Every README still states the app is unaffiliated — keep that, because it is the claim
+that makes using the mark a reference rather than a pretence of endorsement.
 
 **The store photograph carries iParking's branding and was supplied by the maintainer**, who
 was told plainly that a third party's promotional image on a public listing is a rights
