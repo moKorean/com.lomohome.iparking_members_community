@@ -2,31 +2,68 @@
   <!-- Source graphic for drivers/visitcar/assets/images/{small,large,xlarge}.png.
        Rasterized by scripts/make_images.py (rsvg-convert) to 75 / 500 / 1000 square.
 
-       **A plain P, on review's own suggestion.** The previous version was an illustration of
-       a barrier and a car; App Store review asked for "a simple icon depicting a P (as
-       commonly used for parking)" as a cleaner alternative, and they are right — at 75 px,
-       which is the size this image is most often seen at, a scene turns to mush while a
-       letterform stays a letterform.
+       A P, on App Store review's own suggestion: at 75 px — the size this image is seen at
+       most — a scene turns to mush while a letterform stays a letterform.
+
+       **The P is the one from iParking's mark**, the same traced geometry as
+       `assets/icon.svg`: thin stroke, circular bowl, and the terminal that stops short of the
+       stem. The first version of this file used a blocky slab P of my own drawing, and that
+       was the crude part — a heavy rectangular-bowled letter sitting next to an elegant one
+       in the same app's icon. One letterform, used twice.
+
+       Depth comes from a gradient on the tile and a soft shadow beneath it, both built from
+       plain shapes rather than an SVG filter, so the raster comes out the same on any rsvg
+       build. The painted bay markings that used to sit under the P are gone: at thumbnail
+       size they read as a stray box rather than as a car park.
 
        Square with an opaque background, per Homey's driver-image guideline. No <text> and no
-       external font: the P is a path, so it rasterizes identically on any machine. -->
+       external font. -->
 
-  <rect width="1000" height="1000" fill="#FFFFFF"/>
-  <rect x="70" y="70" width="860" height="860" rx="170" fill="#e64230"/>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#F4614E"/>
+      <stop offset="0.55" stop-color="#E64230"/>
+      <stop offset="1" stop-color="#CE3320"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EDEEF2"/>
+    </linearGradient>
+  </defs>
 
-  <!-- P -->
-  <path fill="#FFFFFF" fill-rule="evenodd"
-        d="M356 168 h214 q186 0 186 176 t-186 176 h-104 v192 h-110 z
-           M466 280 v128 h100 q76 0 76 -64 t-76 -64 z" />
+  <rect width="1000" height="1000" fill="url(#paper)"/>
 
-  <!-- Painted bay markings, faint and well clear of the letterform. Enough to say
-       "parking" rather than "the letter P", low-contrast enough not to compete with it at
-       thumbnail size, and the reason the P is set above centre rather than in it. -->
-  <g fill="#FFFFFF" opacity="0.22">
-    <rect x="170" y="796" width="660" height="20" rx="10"/>
-    <rect x="170" y="796" width="20" height="126" rx="10"/>
-    <rect x="390" y="796" width="20" height="126" rx="10"/>
-    <rect x="590" y="796" width="20" height="126" rx="10"/>
-    <rect x="810" y="796" width="20" height="126" rx="10"/>
+  <!-- Soft shadow: two stacked translucent plates, offset down. Cheaper than a blur filter
+       and, unlike one, identical across rsvg versions. -->
+  <rect x="104" y="126" width="792" height="792" rx="196" fill="#1B1B1F" opacity="0.05"/>
+  <rect x="112" y="118" width="776" height="776" rx="192" fill="#1B1B1F" opacity="0.06"/>
+
+  <!-- the tile -->
+  <rect x="100" y="100" width="800" height="800" rx="196" fill="url(#tile)"/>
+  <!-- a sheen across the top, so the tile has a light source instead of being flat -->
+  <path d="M100 296 Q100 100 296 100 h408 q196 0 196 196 v80 H100 Z" fill="url(#sheen)"/>
+
+  <!-- iParking's P, white. Same geometry as assets/icon.svg; the letter's own box is
+       x 70..223, y 95..354 at unit scale, scaled 2.1x and centred on the tile. -->
+  <g transform="translate(196 26) scale(2.1)">
+    <path fill="#FFFFFF" fill-rule="evenodd"
+          d="M70 95
+             H138
+             A85 85 0 0 1 138 265
+             H105
+             V249
+             H86
+             V346
+             A8 8 0 0 1 70 346
+             Z
+             M86 111
+             H138
+             A69 69 0 0 1 138 249
+             H86
+             Z" />
   </g>
 </svg>

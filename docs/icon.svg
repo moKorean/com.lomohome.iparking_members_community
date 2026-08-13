@@ -1,4 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 447 447" width="447" height="447">
+  <!-- ⚠️ SUPERSEDED REFERENCE — DO NOT COPY THIS OVER assets/icon.svg.
+
+       This is the full-colour trace as it stood on 2026-08-13, kept on the maintainer's
+       request. It has a red background rect, and that is exactly what made it render wrong:
+       **Homey draws the app icon as a mask**, so the background covered the canvas and the
+       silhouette became a solid square with the logo lost inside it.
+
+       The shipping icon is `assets/icon.svg` — one path, no background, the P knocked out as
+       a hole. Read the comment there before touching either file.
+
+       The colour values below are still a useful record of the mark's own palette (plate
+       white, ink and background #e64230), which is the only reason this file is worth
+       keeping. -->
+
   <!-- App icon: iParking's mark, as vector paths.
 
        Used on the maintainer's instruction — App Store review suggested it too — from the
