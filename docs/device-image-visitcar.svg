@@ -12,7 +12,7 @@
        external font: the P is a path, so it rasterizes identically on any machine. -->
 
   <rect width="1000" height="1000" fill="#FFFFFF"/>
-  <rect x="70" y="70" width="860" height="860" rx="170" fill="#1B4F72"/>
+  <rect x="70" y="70" width="860" height="860" rx="170" fill="#e64230"/>
 
   <!-- P -->
   <path fill="#FFFFFF" fill-rule="evenodd"

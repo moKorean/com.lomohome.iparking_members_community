@@ -7,7 +7,10 @@
   <script src="/homey.js" data-origin="settings"></script>
   <script src="form.js"></script>
   <style>
-    :root { --brand:#0b6fd4; --bg:#f2f2f5; --card:#fff; --text:#1b1b1f; --muted:#66666e;
+    /* --brand is the manifest's brandColor. They were different for eight versions — this
+       page said #0b6fd4 while app.json said a navy — which nobody noticed because the two
+       surfaces are never on screen together. Keep them equal. */
+    :root { --brand:#e64230; --bg:#f2f2f5; --card:#fff; --text:#1b1b1f; --muted:#66666e;
             --border:#e2e2e8; --ok:#1e8449; --warn:#b9770e; --err:#c0392b; }
     * { box-sizing: border-box; }
     html, body { background: var(--bg) !important; }
@@ -27,7 +30,14 @@
     .buttons button { flex:1 1 0; min-width:0; margin:0; padding:10px 6px; font-size:13px;
                       line-height:1.25; text-align:center; white-space:normal; word-break:keep-all; }
     button.ghost { background:#eeeef2; color:var(--text); }
-    button.danger { background:#c0392b; color:#fff; }
+    /* Destructive buttons are OUTLINED, not another shade of the brand.
+       The brand is red now, and a red 취소 beside a red 등록 is exactly the pair a user must
+       never confuse — 취소 withdraws a live access grant at a real building. Filled = the
+       action you came here to do; outlined = the one that takes something away.
+       `.armed` is the second half of the two-press cancel: once armed it goes solid, so the
+       state change is visible and not only a word swap. */
+    button.danger { background:#fff; color:#a3271a; box-shadow:inset 0 0 0 1.5px #e8b3ab; }
+    button.danger.armed { background:#a3271a; color:#fff; box-shadow:none; }
     button.tiny { padding:5px 10px; font-size:12px; }
     button[disabled] { opacity:.55; cursor:default; }
     .hint { font-size:12px; color:var(--muted); margin:4px 0 0; }
@@ -369,6 +379,7 @@
           button.addEventListener("click", function () {
             if (!armed) {
               armed = true;
+              button.classList.add("armed");
               button.textContent = t("cancelArm");
               button.title = t("cancelConfirm");
               // Disarm if they walk away from it, so a stale armed button cannot be triggered
@@ -376,6 +387,7 @@
               window.setTimeout(function () {
                 if (!armed) return;
                 armed = false;
+                button.classList.remove("armed");
                 button.textContent = t("cancelBtn");
                 button.removeAttribute("title");
               }, 5000);
