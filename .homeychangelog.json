@@ -59,7 +59,7 @@
     "ko": "예약된 방문 차량을 글로 돌려주는 플로우 액션을 추가했습니다. 날짜를 넣으면 그 날짜만, 비워 두면 앞으로 예약된 것을 전부 모아 줍니다. 결과는 목록(글)과 건수(숫자) 두 개의 태그로 나와서, 알림이나 음성으로 읽어 주거나 건수를 조건으로 쓸 수 있습니다. 기기 화면의 값을 새로 읽어오는 주기를 1시간에서 10분으로 줄였습니다 — \"현재 주차 중\"이 최대 10분 늦게 반영됩니다.",
     "en": "Added a Flow action that returns your booked visitor vehicles as text. Give it a date to list that day alone, or leave the date empty to gather everything still to come. The result comes back as two tags — the list itself and a count — so you can read it out in a notification or a spoken message, or branch on how many there are. The device values are now refreshed every ten minutes instead of hourly, so \"parked now\" is at most ten minutes behind."
   },
-  "0.3.2": {
+  "0.3.3": {
     "ko": "앱 색과 그림을 새로 했습니다. 앱 아이콘이 아이파킹 로고로, 앱 색이 아이파킹과 같은 빨강으로 바뀌었습니다. 소개 이미지는 아이파킹이 설치된 아파트 단지 주차장 사진, 기기 이미지는 아이파킹 차단기 일러스트입니다. 등록 내역의 취소 버튼은 테두리만 있는 모양이 되어 등록 버튼과 헷갈리지 않고, 한 번 누르면 채워져 정말 취소할 상태임이 보입니다. 앱 동작에는 변화가 없습니다.",
     "en": "New colour and artwork. The app icon is now the iParking logo and the app colour matches iParking's red. The store picture is a photograph of an iParking installation at an apartment complex, and the device picture is iParking's own illustration of one. Cancel buttons in the registration history are outlined so they cannot be mistaken for the register button, and fill in once armed so it is visible that the next press really cancels. Nothing about how the app works has changed."
   }
