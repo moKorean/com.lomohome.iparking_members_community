@@ -34,8 +34,20 @@ from iparking_lib import compat
 from iparking_lib.const import PAIR_TIMEOUT_S, SETTING_PASSWORD, SETTING_USERNAME
 from iparking_lib.iparking.client import IparkingAuthError, NeedCredentialsError
 
-_SLOW_LOGIN = "로그인 응답이 지연됩니다. 네트워크를 확인하고 다시 시도하세요."
-_NEED_LOGIN = "먼저 앱 설정에서 아이파킹 계정으로 로그인하세요."
+# Pair-view text is **English on the wire, with a key beside it**, and both halves matter.
+#
+# App Store review (2026-08-17) asked for English in the app's own UI with translations
+# layered on top; these strings surface in the pairing view, so English is what an
+# untranslated path must show. The key is what lets the view show Korean instead: the view
+# knows the viewer's language and this module does not — `compat.ui_language` reports what a
+# *settings* webview last announced, which for a pairing session is stale or absent.
+#
+# Keys match `locales/{ko,en}.json` so the wording has one home even though two surfaces
+# render it.
+_SLOW_LOGIN_KEY = "pair_slow_login"
+_NEED_LOGIN_KEY = "pair_need_login"
+_SLOW_LOGIN = "Signing in is taking longer than expected. Check your network and try again."
+_NEED_LOGIN = "Sign in with your iParking account in the app settings first."
 
 
 def _payload(data, kwargs) -> dict:
@@ -62,7 +74,12 @@ def install(driver, session, build_devices) -> None:
         password = await compat.setting_get(driver.homey, SETTING_PASSWORD)
         ready = bool(username and password)
         driver.log(f"pair: check_session ready={ready}")
-        return {"ready": ready, "reason": "" if ready else _NEED_LOGIN}
+        return {
+            "ready": ready,
+            "reason": "" if ready else _NEED_LOGIN,
+            # The view prefers this and falls back to `reason`, so an older view still works.
+            "reason_key": "" if ready else _NEED_LOGIN_KEY,
+        }
 
     async def on_list_devices(data=None, **kwargs) -> list:
         try:

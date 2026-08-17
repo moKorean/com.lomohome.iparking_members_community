@@ -314,7 +314,7 @@ def test_an_account_with_stores_but_no_lots_refuses_with_a_different_message(mak
     *is* enrolled, so the user is pointed at the vendor's own site rather than the office."""
     instance, _homey = make_driver()
 
-    with pytest.raises(Exception, match="주차장을 찾지 못했습니다"):
+    with pytest.raises(Exception, match="No parking lot was found"):
         asyncio.run(instance._build_devices(api=_StubApi(lots=[])))
 
 

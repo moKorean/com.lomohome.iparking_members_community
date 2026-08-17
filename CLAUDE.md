@@ -257,6 +257,33 @@ The mapping is one icon per meaning, and a shared icon on the ten tile buttons:
 `car` for 현재 주차 중, `car-clock` for 다음 방문 예정, and `boom-gate-arrow-up` for every
 자주 오는 차량 button — the buttons do one thing, which is open a gate for a specific car.
 
+## Pair and repair views — English first, Korean layered on
+
+App Store review (2026-08-17, approved with feedback) found `drivers/visitcar/pair/start.html`
+and `drivers/visitcar/repair/reconnect.html` **Korean-only** and asked for English in the app's
+own UI with translations on top. So in both files:
+
+- the **markup ships English**, which is what a viewer sees before any language resolves;
+- an inline `STR = {en, ko}` table supplies the rest, `LANG` starts at `"en"`, and every lookup
+  falls back through `STR.en`;
+- Korean is applied after `resolveLanguage()` answers — `Homey.language`, then `getLanguage()`
+  in callback / promise / string form, then `navigator.language`, then English after 1.5 s so a
+  lookup that never answers cannot stall pairing.
+
+`tests/test_store_text.py` pins all three: no Hangul in the markup, both tables present, and
+the English fallback intact.
+
+**The strings are duplicated on purpose.** A pair view has no route to `locales/*.json` and this
+app serves no endpoint for them — the same constraint `settings/form.js` documents. The
+canonical copies still live in `locales/{ko,en}.json` (`pair_need_login`, `pair_slow_login`,
+`pair_no_lots`) for the Python side.
+
+**Python-side pair text is English on the wire, with a key beside it.** `pairing.py` returns
+`reason` *and* `reason_key`; the view prefers the key because it knows the viewer's language and
+the server does not — `compat.ui_language` reports what a *settings* webview last announced,
+which during a pairing session is stale or absent. Keep both: the key is the translation, the
+text is what an older view or a bare exception message still shows.
+
 ## Never logged
 
 The password in any form; the `access_token` value (presence/length only); raw request

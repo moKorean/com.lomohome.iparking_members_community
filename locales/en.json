@@ -37,5 +37,8 @@
   "cleartext_notice": "Unofficial client for iParking MEMBERS. Sign-in itself goes over verified HTTPS, but iParking's own API server downgrades every HTTPS request it receives to plain HTTP — that is the vendor server's behavior and cannot be fixed from this app. As a result, the access token and your plate/visit data travel over the network unencrypted after sign-in. Registering a visitor vehicle here acts on this building's real access-control system.",
   "flow_list_empty": "No visitor vehicles are booked.",
   "flow_list_empty_on": "No visitor vehicles are booked for {date}.",
-  "flow_list_more": "…and {count} more"
+  "flow_list_more": "…and {count} more",
+  "pair_need_login": "Sign in with your iParking account in the app settings first.",
+  "pair_slow_login": "Signing in is taking longer than expected. Check your network and try again.",
+  "pair_no_lots": "No parking lot was found for this account. Check your complex on the iParking MEMBERS website."
 }

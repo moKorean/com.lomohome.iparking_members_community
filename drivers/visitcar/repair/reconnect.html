@@ -15,20 +15,91 @@
 
 <div id="ip-repair">
   <div class="card">
-    <h2>아이파킹 계정 다시 로그인</h2>
-    <p>비밀번호를 바꾸셨거나 로그인이 만료되면 여기서 다시 로그인하세요. 새 정보가 확인된 뒤에만 저장되므로, 잘못 입력해도 지금 쓰던 계정이 지워지지 않습니다.</p>
-    <label>아이디</label>
+    <h2 data-i18n="title">Sign in to iParking again</h2>
+    <p data-i18n="intro">If you changed your password or the session expired, sign in again here. Nothing is saved until the new details are verified, so a typo cannot lose the account you are using now.</p>
+    <label data-i18n="id">ID</label>
     <input id="username" type="text" autocomplete="username" spellcheck="false">
-    <label>비밀번호</label>
+    <label data-i18n="pw">Password</label>
     <input id="password" type="password" autocomplete="current-password">
-    <button id="save">로그인 &amp; 저장</button>
+    <button id="save" data-i18n="save">Sign in &amp; save</button>
     <div id="msg" class="msg"></div>
   </div>
 </div>
 
 <script type="text/javascript">
+  /*
+   * Strings, en + ko. **English is the markup's default and the fallback**, per App Store
+   * review (2026-08-17), which found this view Korean-only and asked for English in the app's
+   * own UI with translations layered on. The static HTML above ships English and Korean is
+   * applied once the language resolves, so an `en` viewer never sees a flash of Korean and a
+   * viewer whose language cannot be determined still gets something the reviewer can read.
+   *
+   * Inline rather than read from `locales/*.json`: a repair view has no route to the app's
+   * locale files and this app adds no endpoint to serve them — the same reason
+   * `settings/form.js` keeps its own copy, and it says so there too.
+   */
+  var STR = {
+    en: {
+      title: "Sign in to iParking again",
+      intro: "If you changed your password or the session expired, sign in again here. Nothing is saved until the new details are verified, so a typo cannot lose the account you are using now.",
+      id: "ID",
+      pw: "Password",
+      save: "Sign in & save",
+      need: "Enter both your ID and password.",
+      working: "Signing in…",
+      ok: "Done."
+    },
+    ko: {
+      title: "아이파킹 계정 다시 로그인",
+      intro: "비밀번호를 바꾸셨거나 로그인이 만료되면 여기서 다시 로그인하세요. 새 정보가 확인된 뒤에만 저장되므로, 잘못 입력해도 지금 쓰던 계정이 지워지지 않습니다.",
+      id: "아이디",
+      pw: "비밀번호",
+      save: "로그인 & 저장",
+      need: "아이디와 비밀번호를 입력하세요.",
+      working: "로그인 중…",
+      ok: "완료되었습니다."
+    }
+  };
+  var LANG = "en";
+  function t(key) { return (STR[LANG] && STR[LANG][key]) || STR.en[key] || key; }
+
   var started = false, H = null;
   function usable(o) { return !!o && typeof o.ready === "function" && typeof o.emit === "function"; }
+
+  /*
+   * `Homey.language` is only set once i18n has loaded and `getLanguage()` returns a Promise on
+   * current builds, so comparing its return value directly compares against a Promise and
+   * always falls through. Walk every shape, then the browser's own setting, then settle on
+   * English. Same lesson as `settings/index.html`.
+   */
+  function resolveLanguage() {
+    return new Promise(function (resolve) {
+      var settled = false;
+      function done(value) {
+        if (settled) return;
+        settled = true;
+        var raw = typeof value === "string" && value ? value : (navigator.language || "en");
+        var short = String(raw).slice(0, 2).toLowerCase();
+        LANG = Object.prototype.hasOwnProperty.call(STR, short) ? short : "en";
+        resolve(LANG);
+      }
+      try {
+        if (H && typeof H.language === "string" && H.language) return done(H.language);
+        var maybe = H && H.getLanguage && H.getLanguage(function (err, value) { done(err ? null : value); });
+        if (maybe && typeof maybe.then === "function") return maybe.then(done, function () { done(null); });
+        if (typeof maybe === "string") return done(maybe);
+      } catch (e) { /* fall through */ }
+      // Never block the repair flow on a language lookup that may never answer.
+      setTimeout(function () { done(null); }, 1500);
+    });
+  }
+
+  function applyLanguage() {
+    var nodes = document.querySelectorAll("#ip-repair [data-i18n]");
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].textContent = t(nodes[i].getAttribute("data-i18n"));
+    }
+  }
 
   function run(homeyObj) {
     if (started) return;
@@ -38,18 +109,20 @@
     if (!document.getElementById("save")) return;
     started = true; H = ref;
     try { H.ready(); } catch (e) { /* ignore */ }
-    wire();
+    resolveLanguage().then(function () { applyLanguage(); wire(); });
   }
 
   function wire() {
-    function msg(t, c) { var m = document.getElementById("msg"); m.textContent = t; m.className = "msg " + (c || ""); }
+    function msg(text, c) { var m = document.getElementById("msg"); m.textContent = text; m.className = "msg " + (c || ""); }
     document.getElementById("save").addEventListener("click", function () {
       var u = document.getElementById("username").value.trim();
       var p = document.getElementById("password").value;
-      if (!u || !p) { msg("아이디와 비밀번호를 입력하세요.", "err"); return; }
-      var btn = this; btn.disabled = true; msg("로그인 중…");
+      if (!u || !p) { msg(t("need"), "err"); return; }
+      var btn = this; btn.disabled = true; msg(t("working"));
       Promise.resolve(H.emit("login", { username: u, password: p }))
-        .then(function () { msg("완료되었습니다.", "ok"); H.done(); })
+        .then(function () { msg(t("ok"), "ok"); H.done(); })
+        // Server-side failures arrive as text. `client.py` renders those through the app's own
+        // i18n, so they are already in a translated form — shown verbatim rather than remapped.
         .catch(function (err) { btn.disabled = false; msg(String((err && err.message) || err), "err"); });
     });
   }

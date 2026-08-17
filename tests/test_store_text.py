@@ -19,6 +19,7 @@ barrier gate, and a README edit is a very easy place to lose them.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -108,3 +109,80 @@ def test_the_readmes_no_longer_claim_to_be_personal_use_only(name):
 
     for stale in ("personal use only", "개인 용도 전용", "앱스토어에 올리지 않습니다"):
         assert stale not in text, f"{name} still says: {stale}"
+
+# --- the pair and repair views must not be Korean-only ------------------------
+
+
+PAIR_VIEWS = ("drivers/visitcar/pair/start.html", "drivers/visitcar/repair/reconnect.html")
+
+HANGUL = re.compile(r"[\uac00-\ud7a3]")
+
+
+@pytest.mark.parametrize("name", PAIR_VIEWS)
+def test_a_pair_view_ships_english_in_its_markup(name):
+    """App Store review, 2026-08-17: "Your app contains pairing and repair views that are
+    currently only shown in Korean. Please use English language in the main app UI and add
+    translated files or translated strings for other languages."
+
+    The **markup** is what this asserts, not the script: it is what a viewer sees before any
+    language resolves, and before this fix it was Korean with no English anywhere. Korean is
+    now applied on top once the viewer's language is known, so Hangul in the body means the
+    default was written in the wrong language again.
+    """
+    text = (ROOT / name).read_text(encoding="utf-8")
+    body = text.split("<script")[0]
+
+    assert not HANGUL.search(body), (
+        f"{name}'s markup contains Korean; English is the default and Korean is layered on "
+        "by the STR table in the script below it"
+    )
+
+
+@pytest.mark.parametrize("name", PAIR_VIEWS)
+def test_a_pair_view_carries_both_languages(name):
+    """English alone would satisfy review and lose every Korean user this app is built for.
+    Both tables must exist, and neither may be empty."""
+    text = (ROOT / name).read_text(encoding="utf-8")
+
+    assert "STR = {" in text, f"{name} has no string table"
+    for language in ("en:", "ko:"):
+        assert language in text, f"{name} has no {language.rstrip(':')} strings"
+    assert HANGUL.search(text), f"{name} lost its Korean translations"
+
+
+@pytest.mark.parametrize("name", PAIR_VIEWS)
+def test_a_pair_view_falls_back_to_english(name):
+    """`LANG` starts at `en` and every lookup ends there. A viewer whose language cannot be
+    determined — the case that produced this review note — must not land on Korean."""
+    text = (ROOT / name).read_text(encoding="utf-8")
+
+    assert 'var LANG = "en";' in text
+    assert "STR.en[key]" in text
+
+
+def test_the_pairing_handlers_answer_in_english_with_a_key():
+    """The pair view renders `reason_key` in the viewer's language and shows `reason` when it
+    cannot. That fallback text is therefore the untranslated path, so it has to be English —
+    and the key has to keep existing, or the view silently drops to it forever."""
+    source = (ROOT / "iparking_lib/pairing.py").read_text(encoding="utf-8")
+    driver = (ROOT / "iparking_lib/visitcar/driver.py").read_text(encoding="utf-8")
+
+    assert '"reason_key"' in source, "the view needs a key to translate"
+    for name, text in (("pairing.py", source), ("driver.py", driver)):
+        for line in text.splitlines():
+            stripped = line.strip()
+            # Only the module-level user-facing constants; comments and docstrings may be
+            # Korean, and `iparking_lib/i18n.py` owns the translations themselves.
+            if stripped.startswith(("_NEED_LOGIN =", "_SLOW_LOGIN =", '    "No parking',
+                                    "_NO_LOTS = (")):
+                assert not HANGUL.search(line), f"{name}: {stripped[:60]} is not English"
+
+
+@pytest.mark.parametrize("key", ("pair_need_login", "pair_slow_login", "pair_no_lots"))
+def test_the_pairing_strings_are_translated_in_both_locales(key):
+    """Review asked for "translated files or translated strings for other languages". The
+    pair views carry their own copies out of necessity; these are the canonical ones, and a
+    key present in only one locale is how a Korean hub silently falls back to English."""
+    for language in ("ko", "en"):
+        table = json.loads((ROOT / "locales" / f"{language}.json").read_text(encoding="utf-8"))
+        assert table.get(key), f"{language}.json is missing {key}"

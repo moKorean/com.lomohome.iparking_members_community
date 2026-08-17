@@ -15,11 +15,38 @@
 <div id="ip-start">
   <div class="card">
     <p id="msg"><span class="spinner"></span></p>
-    <button id="recheck" style="display:none">다시 확인</button>
+    <button id="recheck" style="display:none">Check again</button>
   </div>
 </div>
 
 <script type="text/javascript">
+  /*
+   * Strings, en + ko. **English is the markup's default and the fallback**, per App Store
+   * review (2026-08-17): this view was Korean-only, and review asked for English in the app's
+   * own UI with translations layered on. So the static HTML above ships English, and Korean is
+   * applied after the language resolves — a viewer on `en` never sees a flash of Korean, and a
+   * viewer whose language cannot be determined still gets a language the reviewer can read.
+   *
+   * Inline rather than read from `locales/*.json`: a pair view has no route to the app's locale
+   * files and this app adds no endpoint to serve them. `settings/form.js` duplicates its strings
+   * for the same reason and says so. The keys here match `locales/*.json`, which is where the
+   * same sentences live for the Python side.
+   */
+  var STR = {
+    en: {
+      recheck: "Check again",
+      needLogin: "Sign in with your iParking account in the app settings first.",
+      hint: "Open this app's settings in the Homey app, sign in with your iParking MEMBERS account, then come back here and press “Check again”."
+    },
+    ko: {
+      recheck: "다시 확인",
+      needLogin: "먼저 앱 설정에서 아이파킹 계정으로 로그인하세요.",
+      hint: "Homey 앱에서 이 앱(아이파킹 방문차량)의 설정을 열어 아이파킹 MEMBERS 계정으로 로그인한 뒤, 이 화면으로 돌아와 ‘다시 확인’을 눌러 주세요."
+    }
+  };
+  var LANG = "en";
+  function t(key) { return (STR[LANG] && STR[LANG][key]) || STR.en[key] || key; }
+
   // onHomeyReady is unreliable across Homey versions, and the Homey global starts life as a
   // constructor whose ready instance arrives later — so trigger init through every mechanism,
   // check that ready/emit are actually functions, and let `started` dedupe. Copied from the
@@ -27,6 +54,34 @@
   // not enough on some firmware.
   var started = false, H = null;
   function usable(o) { return !!o && typeof o.ready === "function" && typeof o.emit === "function"; }
+
+  /*
+   * `Homey.language` is only set once i18n has loaded and `getLanguage()` returns a Promise on
+   * current builds, so comparing its return value directly compares against a Promise and always
+   * falls through. Walk all the shapes, then the browser's own setting, then give up on English.
+   * Same lesson as `settings/index.html`.
+   */
+  function resolveLanguage() {
+    return new Promise(function (resolve) {
+      var settled = false;
+      function done(value) {
+        if (settled) return;
+        settled = true;
+        var raw = typeof value === "string" && value ? value : (navigator.language || "en");
+        var short = String(raw).slice(0, 2).toLowerCase();
+        LANG = Object.prototype.hasOwnProperty.call(STR, short) ? short : "en";
+        resolve(LANG);
+      }
+      try {
+        if (H && typeof H.language === "string" && H.language) return done(H.language);
+        var maybe = H && H.getLanguage && H.getLanguage(function (err, value) { done(err ? null : value); });
+        if (maybe && typeof maybe.then === "function") return maybe.then(done, function () { done(null); });
+        if (typeof maybe === "string") return done(maybe);
+      } catch (e) { /* fall through */ }
+      // Never block the pairing flow on a language lookup that may never answer.
+      setTimeout(function () { done(null); }, 1500);
+    });
+  }
 
   function run(homeyObj) {
     if (started) return;
@@ -36,7 +91,10 @@
     if (!document.getElementById("msg")) return;
     started = true; H = ref;
     try { H.ready(); } catch (e) { /* ignore */ }
-    flow();
+    resolveLanguage().then(function () {
+      document.getElementById("recheck").textContent = t("recheck");
+      flow();
+    });
   }
 
   function flow() {
@@ -48,25 +106,39 @@
     // and, if so, goes straight to the lot list. One device is offered per parking lot.
     function toList() { if (done) return; done = true; H.showView("list_devices"); }
 
-    function guide(reason) {
+    /*
+     * `key` wins over `reason`. The server sends both (`pairing.on_check_session`): the key so
+     * this view can render the viewer's language, the text so an older view — or a path that
+     * only has an exception message — still shows something. The server's own text is English.
+     */
+    function guide(reason, key) {
       if (done) return;
       msg.innerHTML = "";
       var line = document.createElement("div");
       line.style.cssText = "font-weight:600;";
-      line.textContent = reason || "먼저 앱 설정에서 아이파킹 계정으로 로그인하세요.";
+      line.textContent = (key && STR[LANG] && STR[LANG][keyToString(key)])
+        || reason || t("needLogin");
       var hint = document.createElement("div");
       hint.style.cssText = "margin-top:10px;font-size:13px;color:#8a8a92;line-height:1.55;";
-      hint.textContent = "Homey 앱에서 이 앱(아이파킹 방문차량)의 설정을 열어 아이파킹 MEMBERS 계정으로 로그인한 뒤, 이 화면으로 돌아와 ‘다시 확인’을 눌러 주세요.";
+      hint.textContent = t("hint");
       msg.appendChild(line); msg.appendChild(hint);
       btn.style.display = "inline-block";
       btn.onclick = check;
+    }
+
+    // `pair_need_login` (the wire/locale key) -> `needLogin` (this table's key).
+    function keyToString(key) {
+      return { pair_need_login: "needLogin" }[String(key)] || "";
     }
 
     function check() {
       btn.style.display = "none";
       msg.innerHTML = '<span class="spinner"></span>';
       Promise.resolve(H.emit("check_session", {}))
-        .then(function (res) { if (res && res.ready) { toList(); } else { guide(res && res.reason); } })
+        .then(function (res) {
+          if (res && res.ready) { toList(); }
+          else { guide(res && res.reason, res && res.reason_key); }
+        })
         .catch(function (err) { guide(String((err && err.message) || err)); });
     }
 

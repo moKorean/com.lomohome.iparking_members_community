@@ -57,8 +57,8 @@ from iparking_lib.const import (
 #: the empty-authorization-list refusal `enumerate_lots` raises (`no_stores`), because the
 #: remedy differs: there the account is enrolled at no building at all.
 _NO_LOTS = (
-    "이 계정에서 주차장을 찾지 못했습니다. "
-    "아이파킹 MEMBERS 웹사이트에서 단지 정보를 확인하세요."
+    "No parking lot was found for this account. "
+    "Check your complex on the iParking MEMBERS website."
 )
 
 
